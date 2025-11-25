@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  newsnewt:
+    build:
+      context: .
+      dockerfile: dockerfile
+    container_name: newsnewt
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - NEWSNEWT_ARCHIVE_SERVICE=${NEWSNEWT_ARCHIVE_SERVICE:-archive_is}
+      - NEWSNEWT_TIMEOUT_SECONDS=${NEWSNEWT_TIMEOUT_SECONDS:-300}
+      - NEWSNEWT_LOG_LEVEL=${NEWSNEWT_LOG_LEVEL:-INFO}
+      - TZ=${TZ:-UTC}
+    volumes:
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - newsnewt-network
+
+networks:
+  newsnewt-network:
+    driver: bridge
+

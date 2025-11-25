@@ -1,0 +1,68 @@
+{
+  "python.defaultInterpreterPath": "./.venv/bin/python",
+  "python.terminal.activateEnvironment": true,
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}"
+  ],
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit",
+      "source.fixAll.ruff": "explicit"
+    }
+  },
+  "ruff.path": ["./.venv/bin/ruff"],
+  "ruff.importStrategy": "fromEnvironment",
+  "basedpyright.analysis.extraPaths": [
+    "${workspaceFolder}/src"
+  ],
+  "basedpyright.analysis.typeCheckingMode": "standard",
+  "basedpyright.analysis.autoImportCompletions": true,
+  "basedpyright.analysis.autoSearchPaths": true,
+  "basedpyright.analysis.diagnosticMode": "workspace",
+  "files.autoSave": "afterDelay",
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/.pytest_cache": true,
+    "**/.mypy_cache": true,
+    "**/.ruff_cache": true,
+    "**/*.pyc": true
+  },
+  "editor.rulers": [
+    120
+  ],
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[yaml]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[markdown]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[js]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[ts]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[tsx]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "markdownlint.config": {
+    "MD013": false,
+    "MD033": false
+  }
+}

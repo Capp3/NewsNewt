@@ -1,0 +1,9 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or Discussion
+    url: https://github.com/your-org/NewsNewt/discussions
+    about: Ask questions or start a discussion about NewsNewt
+  - name: Security Issue
+    url: https://github.com/your-org/NewsNewt/security/advisories/new
+    about: Report a security vulnerability (do not use regular issues)
+
