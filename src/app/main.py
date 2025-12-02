@@ -8,6 +8,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
+from crawlee import Request
 from crawlee.crawlers import PlaywrightCrawler, PlaywrightCrawlingContext
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
@@ -71,6 +72,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Shared state for tracking requests and results
     app.state.requests_to_results: dict[str, dict[str, Any]] = {}
     app.state.pending_requests: dict[str, asyncio.Future] = {}
+    app.state.crawler_running: bool = False
+    app.state.crawler_task: asyncio.Task | None = None
 
     # Configure crawler settings from environment
     headless = os.getenv("PLAYWRIGHT_HEADLESS", "true").lower() == "true"
@@ -183,6 +186,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         max_requests_per_crawl=None,  # No limit
         max_request_retries=1,
         request_handler=request_handler,
+        launch_options={
+            "args": ["--no-sandbox", "--disable-setuid-sandbox"],  # Required for Docker
+        },
     )
 
     # Apply stealth mode if enabled
@@ -220,6 +226,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("=" * 60)
 
     yield
+
+    # Cleanup: Cancel crawler task
+    if app.state.crawler_task:
+        logger.info("Cancelling crawler task...")
+        app.state.crawler_task.cancel()
+        try:
+            await app.state.crawler_task
+        except asyncio.CancelledError:
+            pass
 
     # Cleanup
     logger.info("=" * 60)
@@ -280,12 +295,26 @@ async def scrape(request: ScrapeRequest) -> ScrapeResponse:
 
     # Add request to crawler
     logger.debug(f"[{request_id}] Queueing request to crawler...")
-    await app.state.crawler.add_requests([{"url": request.url, "user_data": user_data}])
+    crawlee_request = Request.from_url(request.url, user_data=user_data)
+    await app.state.crawler.add_requests([crawlee_request])
 
-    # Run crawler if not already running
-    if not app.state.crawler._has_started:
+    # Start crawler if not already running or if it has finished
+    if not app.state.crawler_running or (
+        app.state.crawler_task and app.state.crawler_task.done()
+    ):
         logger.debug(f"[{request_id}] Starting crawler...")
-        asyncio.create_task(app.state.crawler.run())
+        app.state.crawler_running = True
+
+        # Create a wrapper to reset the flag when crawler finishes
+        async def run_crawler():
+            try:
+                await app.state.crawler.run()
+            finally:
+                app.state.crawler_running = False
+
+        app.state.crawler_task = asyncio.create_task(run_crawler())
+        # Wait a bit for crawler to start processing
+        await asyncio.sleep(0.1)
 
     # Wait for result with timeout
     logger.debug(f"[{request_id}] Waiting for result (timeout: {timeout}s)...")

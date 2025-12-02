@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   newsnewt:
     build:
@@ -9,29 +7,29 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
-    
+
     # Optional: Load environment variables from .env file
     # Create a .env file in project root or use config/.env.sample as template
     # env_file:
     #   - .env
-    
+
     # Environment variables with defaults
     # These can be overridden by creating a .env file or setting them in your environment
     environment:
       # Scraping Configuration
       - CRAWL_CONCURRENCY=${CRAWL_CONCURRENCY:-3}  # Max concurrent scrapes (1-10)
       - LOG_LEVEL=${LOG_LEVEL:-INFO}               # Logging level (DEBUG, INFO, WARNING, ERROR)
-      
+
       # Browser Configuration
       - PLAYWRIGHT_HEADLESS=${PLAYWRIGHT_HEADLESS:-true}  # Run browser headless
       - ENABLE_STEALTH=${ENABLE_STEALTH:-true}            # Enable anti-detection mode
-      
+
       # General Configuration
       - TZ=${TZ:-UTC}  # Timezone for logs and timestamps
-    
+
     volumes:
       - ./logs:/app/logs  # Persist logs to host
-    
+
     networks:
       - newsnewt-network
 
