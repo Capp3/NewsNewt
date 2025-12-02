@@ -8,20 +8,15 @@ services:
     container_name: newsnewt
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "3000:3000"
     environment:
-      - NEWSNEWT_ARCHIVE_SERVICE=${NEWSNEWT_ARCHIVE_SERVICE:-archive_is}
-      - NEWSNEWT_TIMEOUT_SECONDS=${NEWSNEWT_TIMEOUT_SECONDS:-300}
-      - NEWSNEWT_LOG_LEVEL=${NEWSNEWT_LOG_LEVEL:-INFO}
+      - CRAWL_CONCURRENCY=${CRAWL_CONCURRENCY:-3}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - PLAYWRIGHT_HEADLESS=${PLAYWRIGHT_HEADLESS:-true}
+      - ENABLE_STEALTH=${ENABLE_STEALTH:-true}
       - TZ=${TZ:-UTC}
     volumes:
       - ./logs:/app/logs
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 5s
     networks:
       - newsnewt-network
 

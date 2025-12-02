@@ -1,52 +1,72 @@
-# Git
-.git
-.gitignore
-
-# Python
-__pycache__
-*.pyc
-*.pyo
-*.pyd
-.Python
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
 *.so
-*.egg
-*.egg-info
-dist
-build
-.eggs
-.venv
-venv/
-ENV/
+.Python
 
-# IDE
-.vscode
-.idea
-*.swp
-*.swo
-*~
-.cursor
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
 # Testing
-.pytest_cache
+.pytest_cache/
 .coverage
 htmlcov/
 .tox/
+.nox/
 
-# Logs (we mount this as a volume)
+# Linting
+.ruff_cache/
+.mypy_cache/
+.pytype/
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Logs
 logs/
 *.log
+
+# Environment files
+.env
+.env.*
+!.env.sample
 
 # Documentation build
 site/
 docs/_build/
 
-# Docker
-dockerfile
-compose.yml
-.dockerignore
-
-# Misc
-.DS_Store
-.env
-config/.env
+# Project specific
 optimization-journey/
+.cursor/

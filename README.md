@@ -1,335 +1,174 @@
-# NewsNewt
 
-A single-purpose Python microservice that archives news articles and extracts their content as structured JSON, optimized for LLM consumption in n8n workflows.
-
-## Overview
-
-NewsNewt is designed to:
-
-- Accept a news article URL via HTTP POST
-- Archive the article using Archive.is/Archive.today
-- Extract the main article content from the archived page
-- Return clean, structured JSON optimized for downstream LLM processing
-
-The service runs as a private Dockerized microservice in controlled networks and is intentionally minimal and focused.
-
-## Features
-
-- **Archive-First Workflow:** Mandatory archiving ensures content preservation
-- **Structured JSON Output:** Optimized for LLM consumption
-- **Error Handling:** Clear error codes and structured error messages
-- **Health Checks:** Container orchestration support
-- **Comprehensive Logging:** Configurable log levels with rotation
-- **Rate Limiting:** Built-in rate limiting for Archive.is to prevent 429 errors
-
-## Architecture
-
-- **Language:** Python 3.12
-- **HTTP Framework:** FastAPI
-- **Archive Integration:** Archive.is (direct httpx integration)
-- **Content Extraction:** trafilatura
-- **Deployment:** Docker container in private network
-
-## Quick Start
-
-### Prerequisites
-
-- Docker and Docker Compose
-- Ports 8000 available
-
-### Run with Docker Compose
-
-```bash
-# Clone the repository
-git clone <repository-url>
-cd NewsNewt
-
-# Copy environment configuration (optional - uses defaults if not present)
-cp .env.sample .env
-
-# Start the service
-docker compose up -d
-
-# Check service status
-curl http://localhost:8000/health
-# Expected response: {"status":"ok"}
-
-# Stop the service
-docker compose down
-```
-
-## API Usage
-
-### Health Check
-
-```bash
-GET /health
-```
-
-**Response:**
-
-```json
-{
-  "status": "ok"
-}
-```
-
-### Service Information
-
-```bash
-GET /
-```
-
-**Response:**
-
-```json
-{
-  "service": "NewsNewt",
-  "version": "0.1.0",
-  "status": "running",
-  "endpoints": {
-    "health": "/health",
-    "article": "/article (POST)"
-  }
-}
-```
-
-### Archive and Extract Article
-
-```bash
-POST /article
-Content-Type: application/json
-
-{
-  "url": "https://example.com/news/article",
-  "force_archive": false,
-  "archive_service": "archive_is"
-}
-```
-
-**Successful Response (200 OK):**
-
-```json
-{
-  "url": "https://example.com/news/article",
-  "archive_url": "https://archive.is/abc123",
-  "body_text": "Article content here...",
-  "title": null,
-  "byline": null,
-  "published_date": null
-}
-```
-
-**Error Response (400/500):**
-
-```json
-{
-  "detail": {
-    "error": {
-      "code": "INVALID_URL",
-      "message": "URL must be a valid http or https URL"
-    }
-  }
-}
-```
-
-### Error Codes
-
-| Code                 | HTTP Status | Description                    |
-| -------------------- | ----------- | ------------------------------ |
-| `INVALID_URL`        | 422         | Invalid URL format or protocol |
-| `ARCHIVE_TIMEOUT`    | 500         | Archive service timed out      |
-| `ARCHIVE_FAILURE`    | 500         | Archive service failed         |
-| `EXTRACTION_FAILURE` | 500         | Content extraction failed      |
-| `INTERNAL_ERROR`     | 500         | Unexpected error occurred      |
-
-## Configuration
-
-Environment variables can be configured in `.env` or passed directly to Docker.
-
-### Environment Variables
-
-| Variable                   | Options                                         | Default      | Description                |
-| -------------------------- | ----------------------------------------------- | ------------ | -------------------------- |
-| `NEWSNEWT_ARCHIVE_SERVICE` | `archive_is`, `archive_today`, `auto`           | `archive_is` | Archive service to use     |
-| `NEWSNEWT_TIMEOUT_SECONDS` | 10-600                                          | 300          | Request timeout in seconds |
-| `NEWSNEWT_LOG_LEVEL`       | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` | `INFO`       | Logging verbosity          |
-| `TZ`                       | Timezone string                                 | `UTC`        | Container timezone         |
-
-### Example .env File
-
-```env
-NEWSNEWT_ARCHIVE_SERVICE=archive_is
-NEWSNEWT_TIMEOUT_SECONDS=300
-NEWSNEWT_LOG_LEVEL=INFO
-TZ=UTC
-```
-
-## Development
-
-### Prerequisites
-
-- Python 3.12+
-- [uv](https://github.com/astral-sh/uv) package manager
-
-### Setup
-
-```bash
-# Install dependencies
-uv sync
-
-# Install development dependencies
-uv sync --extra dev
-
-# Run tests
-uv run pytest tests/ -v
-
-# Run tests with coverage
-uv run pytest tests/ --cov=src/newsnewt --cov-report=term-missing
-
-# Run linter
-uv run ruff check src/
-
-# Format code
-uv run black src/ tests/
-```
-
-### Run Locally
-
-```bash
-# Run the service
-uv run python -m newsnewt.main
-
-# Service will be available at http://localhost:8000
-```
-
-## Project Structure
-
-```
-NewsNewt/
-├── src/newsnewt/          # Source code
-│   ├── api.py             # FastAPI application and endpoints
-│   ├── archive.py         # Archive.is integration
-│   ├── config.py          # Configuration management
-│   ├── extractor.py       # Content extraction with trafilatura
-│   ├── logging_config.py  # Logging configuration
-│   ├── main.py            # Application entry point
-│   ├── models.py          # Pydantic models
-│   ├── rate_limit.py      # Rate limiting for Archive.is
-│   └── utils.py           # Utility functions
-├── tests/                 # Test suite
-│   ├── unit/              # Unit tests
-│   └── integration/       # Integration tests
-├── config/                # Configuration files
-│   └── .env.sample        # Environment variable template
-├── logs/                  # Application logs (created at runtime)
-├── docs/                  # Documentation
-│   ├── project-brief.md   # Project specifications
-│   ├── technical.md       # Technical details
-│   ├── TESTING.md         # Testing documentation
-│   └── DEPLOYMENT.md      # Deployment guide
-├── dockerfile             # Docker image definition
-├── compose.yml            # Docker Compose configuration
-├── pyproject.toml         # Project metadata and dependencies
-└── README.md              # This file
-```
-
-## Docker
-
-### Build Manually
-
-```bash
-# Build the image
-docker build -t newsnewt:latest -f dockerfile .
-
-# Run the container
-docker run -d \
-  --name newsnewt \
-  -p 8000:8000 \
-  -e NEWSNEWT_LOG_LEVEL=INFO \
-  -v $(pwd)/logs:/app/logs \
-  newsnewt:latest
-
-# Check logs
-docker logs newsnewt
-
-# Stop the container
-docker stop newsnewt && docker rm newsnewt
-```
-
-### Health Check
-
-The Docker image includes a built-in health check that runs every 30 seconds:
-
-```bash
-# Check health status
-docker inspect --format='{{.State.Health.Status}}' newsnewt
-```
-
-## Testing
-
-The project includes comprehensive test coverage:
-
-- **Unit Tests:** 33 tests covering critical paths (URL validation, config, utils, rate limiting)
-- **Integration Tests:** 10 tests covering full API workflows and error scenarios
-- **Coverage:** 63% overall (critical paths at 90%+)
-
-See [docs/TESTING.md](docs/TESTING.md) for detailed testing documentation.
-
-## Documentation
-
-- **[Project Brief](docs/project-brief.md)** - Complete project specifications
-- **[Technical Documentation](docs/technical.md)** - Technical details and API specs
-- **[Testing Documentation](docs/TESTING.md)** - Testing guide and coverage
-- **[Deployment Guide](docs/DEPLOYMENT.md)** - Production deployment instructions
-
-## Logging
-
-Logs are written to:
-
-- Console (stdout/stderr)
-- File: `logs/newsnewt.log` (with rotation, max 10MB, 5 backups)
-
-Log format:
-
-```
-2025-11-25 15:30:00 UTC - module.name - LEVEL - message
-```
-
-## Rate Limiting
-
-NewsNewt includes built-in rate limiting for Archive.is to prevent 429 (Too Many Requests) errors:
-
-- Minimum 5-second interval between archive requests
-- Async-safe with lock mechanism
-- Automatic delay when needed
-
-## Known Limitations
-
-- Archive.is may rate-limit automated requests (this is expected behavior)
-- Metadata extraction (title, byline, date) returns `null` in MVP (body text only)
-- Archive.today and Archive.is are the same service (different domains)
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Support
-
-For issues or questions:
-
-1. Check the [documentation](docs/)
-2. Review the [testing guide](docs/TESTING.md)
-3. Check [deployment guide](docs/DEPLOYMENT.md)
-
-## Changelog
-
-### v0.1.0 (2025-11-25)
-
-- ✅ Initial MVP release
-- ✅ Archive.is integration with rate limiting
-- ✅ Content extraction with trafilatura
-- ✅ FastAPI REST API
-- ✅ Docker deployment
-- ✅ Comprehensive test suite
-- ✅ Structured error handling
+## Project overview
+
+Build a self‑hosted “scraping micro‑API” that exposes a small set of HTTP endpoints (FastAPI) which internally use Crawlee for Python with PlaywrightCrawler to fetch and extract structured data from web pages, returning JSON only.[1][2]
+The service runs in Docker (via docker‑compose) and is consumed from n8n using the HTTP Request node with JSON request/response.[3][4][1]
+
+## Core requirements
+
+- **Self‑hosted service**:
+  - Runs as a Docker container, orchestrated via `docker-compose.yml`.[5]
+  - Exposes one port (e.g. `8080`) for FastAPI.
+
+- **Scraping capabilities**:
+  - Uses **Crawlee for Python** with **PlaywrightCrawler** for JS‑heavy pages.[2]
+  - Supports:
+    - Single‑URL scrape (primary use case).
+    - Optional small multi‑page crawl (e.g. follow article pagination or next links).
+
+- **Output format**:
+  - Always responds with `Content-Type: application/json`.
+  - For each request returns:
+    - `url`
+    - `data` (structured fields)
+    - `meta` (status code, timestamp, duration, debug info).
+
+- **n8n integration**:
+  - Optimized for the n8n HTTP Request node: POST with JSON body, response parsed as JSON.[4][3]
+  - Stable URL paths and simple authentication (API key header or basic token).
+
+## API design
+
+All endpoints are `application/json` in and out.
+
+1. `POST /scrape`
+   - **Purpose**: Scrape a single page with user‑defined selectors.
+   - Request body:
+     - `url` (string, required)
+     - `selectors` (object, optional): keys are field names, values indicate CSS/XPath or simple extraction rules, e.g.  
+       `{"title": {"css": "h1"}, "content": {"css": "article"}}`
+     - `render_js` (bool, default `true`): whether to use full Playwright rendering.
+     - `wait_until` (string, optional): e.g. `"networkidle"`.
+     - `timeout_ms` (int, optional).
+   - Response body:
+     - `url` (string)
+     - `data` (object): extracted fields (strings, arrays, etc.).
+     - `meta`: `{ "status": int, "fetched_at": string, "duration_ms": int, "selector_mode": "css" | "xpath" }`.
+
+2. `POST /scrape-news`
+   - **Purpose**: Opinionated extraction for news/article pages.
+   - Request body:
+     - `url` (string)
+     - Optional `profile` (string): `"generic"` or a site‑specific profile.
+   - Response body (`data`):
+     - `title`, `subtitle`, `author`, `published_at`, `content`, `images`, `tags`.
+
+3. `POST /crawl`
+   - **Purpose**: Shallow multi‑page crawl (e.g. section or tag pages).
+   - Request body:
+     - `start_url` (string)
+     - `max_pages` (int, default 10)
+     - `follow_patterns` (array of regex/substring to decide which links to enqueue)
+     - `selectors` (as in `/scrape`).
+   - Response body:
+     - `items`: array of `{ "url": string, "data": {...}, "meta": {...} }`.
+     - `meta`: crawl summary (pages_visited, pages_skipped, errors).
+
+4. **Auth / health**
+   - `GET /health` – returns `{ "status": "ok" }` without auth.
+   - All other endpoints require `X-API-Key: <token>` or `Authorization: Bearer <token>`.
+
+## Internal architecture
+
+- **FastAPI app**:
+  - Follows Crawlee’s “running in a web server” pattern with a `lifespan` function that instantiates and holds a crawler instance and a `requests_to_results` dict shared via `app.state`.[1]
+  - Async routes that:
+    - Validate payload.
+    - Register a future / callback with the crawler.
+    - Enqueue the URL and await completion.
+    - Return JSON.
+
+- **Crawlee setup**:
+  - Main crawler: `PlaywrightCrawler` with:
+    - Global concurrency limit.
+    - Global request timeout.
+    - Optional proxy settings.
+  - Default handler extracts:
+    - DOM snapshot and then applies selectors / news heuristics.
+  - For `/crawl`, use Crawlee’s request queue and link extraction logic (select anchors matching `follow_patterns`).[2]
+
+- **Extraction strategies**:
+  - **Selector mode**:
+    - If `selectors` provided, map each field to a CSS/XPath query and text/attribute extraction.
+  - **News mode**:
+    - Use heuristics: `<article>`, `<main>`, `meta[property="og:*"]`, date patterns, etc.
+    - Allow per‑site overrides via profile definitions.
+
+- **Error handling**:
+  - Normalize network, timeout, and DOM errors into JSON:
+    - `meta.error_type`, `meta.error_message`, `meta.http_status` (if available).
+  - Never return HTML or stack traces; useful debug info stays in logs.
+
+## Docker & deployment
+
+- **Dockerfile**:
+  - Base `python:3.12-slim` (or similar).
+  - Install system libraries required for Playwright (Chromium, fonts, etc.).
+  - Install Python deps: `fastapi[standard]`, `crawlee`, `playwright`, plus any extras.[1][2]
+  - Run `playwright install chromium` in build stage or entrypoint.
+
+- **docker-compose.yml**:
+  - Single service `scraper-api`:
+    - `build: .`
+    - `ports: ["8080:8080"]`
+    - `environment`: `API_KEY`, `CRAWL_CONCURRENCY`, `PLAYWRIGHT_HEADLESS=true`, proxy settings.
+    - Optional resource limits (CPU/memory).
+  - (Optional) Attach a shared network and volume if logs or cache are needed.
+
+- **Runtime**:
+  - ASGI server: `uvicorn app.main:app --host 0.0.0.0 --port 8080`.
+  - Healthcheck configured in Compose using `curl` to `/health`.
+
+## n8n usage pattern
+
+- **HTTP Request node configuration**:[3][4]
+  - Method: `POST`.
+  - URL: e.g. `http://scraper-api:8080/scrape` (inside Docker network) or external host.
+  - Authentication: custom header `X-API-Key`.
+  - Body:
+    - Mode: JSON.
+    - Example body:
+      ```json
+      {
+        "url": "https://example.com/news/123",
+        "selectors": {
+          "title": { "css": "h1.article-title" },
+          "content": { "css": "article" }
+        },
+        "render_js": true
+      }
+      ```
+  - Response:
+    - Response format: JSON.
+    - Use `Field Containing Data` if you want to only pass `data` or `items` into later nodes.
+
+- **Typical workflows**:
+  - Trigger → HTTP Request (`/scrape-news`) → process JSON → store in DB.
+  - Loop over a list of URLs items, each going through `/scrape`.
+
+## Non‑functional requirements
+
+- **Performance & concurrency**:
+  - Configurable `CRAWL_CONCURRENCY` (e.g. 3–5) via env, exposed in Docker compose.[6]
+  - Typical single page scrape target: <3–5 seconds on average news site.
+
+- **Observability**:
+  - Structured logs (JSON) per request: URL, status, duration, error.
+  - Optional basic metrics: total requests, failures, average latency.
+
+- **Security**:
+  - Simple key‑based auth is acceptable for internal n8n use.
+  - Allow IP allow‑listing / reverse proxy hardening (Nginx, Traefik) out of scope but considered.
+
+If you want, the next step can be a concrete skeleton: `app/main.py` with the FastAPI + Crawlee `lifespan` pattern, and sample Dockerfile and docker‑compose tailored to your stack.
+
+[1](https://crawlee.dev/python/docs/guides/running-in-web-server)
+[2](https://crawlee.dev/python/docs/quick-start)
+[3](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.httprequest/)
+[4](https://n8n.io/integrations/http-request/)
+[5](https://stackoverflow.com/questions/65233680/run-fastapi-inside-docker-container)
+[6](https://www.reddit.com/r/n8n/comments/1l1i5mp/i_made_a_crawlee_server_built_specifically_for/)
+[7](https://www.youtube.com/watch?v=c5dw_jsGNBk)
+[8](https://automategeniushub.com/mastering-the-n8n-http-request-node/)
+[9](https://community.n8n.io/t/calling-a-python-script-from-n8n/82900)
+[10](https://docs.apify.com/platform/integrations/n8n/website-content-crawler)

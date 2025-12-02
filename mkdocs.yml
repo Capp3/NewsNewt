@@ -1,5 +1,5 @@
 site_name: NewsNewt
-site_description: Archive and extract news articles from URLs
+site_description: Crawlee-based scraping microservice for n8n
 site_author: NewsNewt Contributors
 
 # Configuration
@@ -15,16 +15,12 @@ markdown_extensions:
   - codehilite
   - toc:
       permalink: true
+  - admonition
+  - tables
 
-# Page tree - User-focused organization
+# Page tree
 nav:
   - Home: index.md
-  - Getting Started:
-    - Project Overview: project-brief.md
-    - Deployment Guide: DEPLOYMENT.md
-  - User Guide:
-    - API Reference: technical.md
-    - Architecture: architecture.md
-  - Operations:
-    - Deployment: DEPLOYMENT.md
-    - Testing: TESTING.md
+  - Documentation:
+      - Architecture: architecture.md
+      - Technical Reference: technical.md

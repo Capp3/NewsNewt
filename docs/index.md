@@ -1,106 +1,156 @@
-# NewsNewt Documentation
+# NewsNewt
 
-Welcome to the NewsNewt documentation. This guide will help you deploy, configure, and use NewsNewt to archive and extract news article content.
+**Crawlee-based scraping microservice for n8n**
 
-## What is NewsNewt?
+## Overview
 
-NewsNewt is a single-purpose Python microservice that:
+NewsNewt is a self-hosted web scraping microservice designed specifically for integration with n8n workflows. Built on Crawlee for Python with Playwright, it provides robust JavaScript rendering capabilities and intelligent content extraction.
 
-- Accepts news article URLs via HTTP POST
-- Archives articles using Archive.is/Archive.today
-- Extracts main article content from archived pages
-- Returns clean, structured JSON optimized for downstream LLM processing
+### Key Features
 
-The service is designed to run in private Docker networks, particularly for use in n8n workflows.
+- **Playwright-Powered**: Full JavaScript rendering for modern web applications
+- **Stealth Mode**: Configurable anti-detection measures to reduce CAPTCHA triggers
+- **Intelligent Extraction**: Flexible CSS selector matching with automatic fallbacks
+- **Popup Handling**: Automatic dismissal of cookie banners and popups
+- **CAPTCHA Detection**: Identifies CAPTCHAs and returns structured error responses
+- **n8n Optimized**: JSON-only API designed for HTTP Request node integration
+- **Docker Native**: Single-container deployment via docker-compose
 
 ## Quick Start
 
-Get NewsNewt running in minutes:
+### Prerequisites
+
+- Docker and Docker Compose
+- Basic understanding of n8n HTTP Request nodes
+
+### Running the Service
+
+1. **Clone the repository**:
 
 ```bash
-# Start with Docker Compose
-docker compose up -d
-
-# Verify it's working
-curl http://localhost:8000/health
-# Expected: {"status":"ok"}
+git clone <repository-url>
+cd NewsNewt
 ```
 
-See the [Deployment Guide](DEPLOYMENT.md) for detailed setup instructions.
-
-## Documentation Overview
-
-### Getting Started
-
-- **[Project Overview](project-brief.md)** - Complete project specifications and requirements
-- **[Deployment Guide](DEPLOYMENT.md)** - Step-by-step deployment instructions for local and production environments
-
-### User Guide
-
-- **[API Reference](technical.md)** - Complete API documentation with examples
-- **[Architecture](architecture.md)** - System architecture and component interactions
-
-### Operations
-
-- **[Testing](TESTING.md)** - Test suite documentation and coverage
-- **[Deployment](DEPLOYMENT.md)** - Production deployment, monitoring, and troubleshooting
-
-## Key Features
-
-- **Archive-First Workflow:** Mandatory archiving ensures content preservation
-- **Structured JSON Output:** Optimized for LLM consumption
-- **Error Handling:** Clear error codes and structured error messages
-- **Health Checks:** Container orchestration support
-- **Rate Limiting:** Built-in protection against Archive.is rate limits
-- **Comprehensive Logging:** Configurable log levels with rotation
-
-## Example Usage
-
-Archive and extract an article:
+2. **Start the service**:
 
 ```bash
-curl -X POST http://localhost:8000/article \
+docker-compose up -d
+```
+
+The service will be available at `http://localhost:3000`
+
+3. **Verify it's running**:
+
+```bash
+curl http://localhost:3000/health
+```
+
+Expected response: `{"status": "ok"}`
+
+### Basic Usage Example
+
+Scrape a webpage with automatic content extraction:
+
+```bash
+curl -X POST http://localhost:3000/scrape \
   -H "Content-Type: application/json" \
   -d '{
-    "url": "https://example.com/news/article",
-    "force_archive": false,
-    "archive_service": "archive_is"
+    "url": "https://example.com/article",
+    "selectors": {
+      "title": {"css": "h1"},
+      "content": {"css": "article"}
+    }
   }'
 ```
 
-**Response:**
+### Using with n8n
 
-```json
-{
-  "url": "https://example.com/news/article",
-  "archive_url": "https://archive.is/abc123",
-  "body_text": "Article content here...",
-  "title": null,
-  "byline": null,
-  "published_at": null,
-  "source_domain": null,
-  "language": null
-}
-```
+1. Add an **HTTP Request** node to your workflow
+2. Configure:
+   - **Method**: POST
+   - **URL**: `http://newsnewt:3000/scrape` (if on same Docker network) or `http://localhost:3000/scrape`
+   - **Body Content Type**: JSON
+   - **Body**:
+     ```json
+     {
+       "url": "{{$json.url}}",
+       "selectors": {
+         "title": { "css": "h1" },
+         "content": { "css": "article" }
+       }
+     }
+     ```
+3. The response will contain:
+   - `url`: The scraped URL
+   - `data`: Extracted fields as key-value pairs
+   - `meta`: Status, duration, and any error information
 
 ## Configuration
 
-All configuration is done via environment variables:
+The service is configured via environment variables in `compose.yml`:
 
-- `NEWSNEWT_ARCHIVE_SERVICE` - Archive backend (default: `archive_is`)
-- `NEWSNEWT_TIMEOUT_SECONDS` - Request timeout (default: `300`)
-- `NEWSNEWT_LOG_LEVEL` - Log verbosity (default: `INFO`)
-- `TZ` - Timezone (recommended: `UTC`)
+| Variable              | Default | Description                                    |
+| --------------------- | ------- | ---------------------------------------------- |
+| `CRAWL_CONCURRENCY`   | `3`     | Maximum concurrent scraping operations         |
+| `LOG_LEVEL`           | `INFO`  | Logging level (DEBUG, INFO, WARNING, ERROR)    |
+| `PLAYWRIGHT_HEADLESS` | `true`  | Run browser in headless mode                   |
+| `ENABLE_STEALTH`      | `true`  | Enable stealth mode to avoid CAPTCHA detection |
 
-See the [Deployment Guide](DEPLOYMENT.md#configuration) for complete configuration options.
+## API Endpoints
+
+### GET /health
+
+Health check endpoint. Returns 200 OK if service is running.
+
+**Response**:
+
+```json
+{
+  "status": "ok"
+}
+```
+
+### POST /scrape
+
+Scrape a URL with optional CSS selectors.
+
+**Request Body**:
+
+```json
+{
+  "url": "https://example.com",
+  "selectors": {
+    "field_name": { "css": "selector" }
+  },
+  "timeout_ms": 30000
+}
+```
+
+**Response**:
+
+```json
+{
+  "url": "https://example.com",
+  "data": {
+    "field_name": "extracted value"
+  },
+  "meta": {
+    "status": 200,
+    "duration_ms": 1234
+  }
+}
+```
+
+## Documentation
+
+- **[Architecture](architecture.md)**: System design and component overview
+- **[Technical Reference](technical.md)**: Detailed API documentation and configuration
 
 ## Support
 
-- Check the [Deployment Guide](DEPLOYMENT.md#troubleshooting) for common issues
-- Review the [Testing Documentation](TESTING.md) for test coverage details
-- See the [Project Brief](project-brief.md) for complete specifications
+For issues and feature requests, please use the project's issue tracker.
 
----
+## License
 
-**Version:** 0.1.0  
-**Status:** Production Ready
+See LICENSE file for details.

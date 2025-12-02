@@ -1,138 +1,30 @@
-# NewsNewt - Technical Documentation
+# Technical Reference
 
-> **Technical architecture, implementation details, and development guidelines**
+This document provides detailed technical information about the NewsNewt API, configuration options, and implementation details.
 
-## Architecture Overview
+## API Reference
 
-NewsNewt is a Python 3.12 microservice providing an HTTP API for archiving and extracting news article content. It follows a simple, focused architecture designed for containerized deployment in private networks.
+### Base URL
 
----
+- **Development/Local**: `http://localhost:3000`
+- **Docker Network**: `http://newsnewt:3000` (when accessed from other containers)
 
-## System Components
-
-### 1. HTTP API Layer
-
-**Responsibility:** Request handling, validation, and response formatting
-
-**Components:**
-
-- Request validation and normalization
-- Route handlers (POST /article, GET /health)
-- Error response formatting
-- Request/response logging
-
-### 2. Archive Service Integration
-
-**Responsibility:** Interaction with Archive.is/Archive.today
-
-**Components:**
-
-- Archive service abstraction
-- URL archiving (new or existing snapshot lookup)
-- Archive URL resolution
-- Timeout and error handling
-
-### 3. Content Extraction
-
-**Responsibility:** Article content extraction from archived HTML
-
-**Components:**
-
-- HTML parsing and cleaning using trafilatura
-- Article body text extraction (required, minimum 50 characters)
-- Error handling for extraction failures
-
-**Note:** Metadata extraction (title, byline, date) returns `null` in MVP.
-
-### 4. Configuration & Logging
-
-**Responsibility:** Environment configuration and observability
-
-**Components:**
-
-- Environment variable management
-- Logging configuration with rotation
-- Health check implementation
+All endpoints accept and return `application/json` unless otherwise specified.
 
 ---
 
-## Technology Stack
-
-### Core Runtime
-
-- **Python:** 3.12
-- **HTTP Framework:** FastAPI
-- **Archive Integration:** Direct Archive.is integration via httpx
-- **Content Extraction:** trafilatura
-
-### Development Tools
-
-- **Code Formatting:** black
-- **Linting:** ruff
-- **Package Management:** uv (based on pyproject.toml)
-
-### Infrastructure
-
-- **Containerization:** Docker
-- **Orchestration:** Docker Compose
-- **Logging:** Python logging module with rotating handlers
-
----
-
-## API Specification
-
-### POST /article
-
-**Purpose:** Archive and extract article content from a URL
-
-**Request:**
-
-```json
-{
-  "url": "https://example.com/news/article-123",
-  "force_archive": false,
-  "archive_service": "auto"
-}
-```
-
-**Response (Success - 200 OK):**
-
-```json
-{
-  "url": "https://example.com/news/article-123",
-  "archive_url": "https://archive.is/abcdE",
-  "body_text": "Full article text...",
-  "title": null,
-  "byline": null,
-  "published_at": null,
-  "source_domain": null,
-  "language": null
-}
-```
-
-**Note:** In MVP, only `body_text` is populated. Optional metadata fields (title, byline, etc.) are set to `null`.
-
-**Response (Error - 400/422/500):**
-
-```json
-{
-  "detail": {
-    "error": {
-      "code": "ERROR_CODE",
-      "message": "Human-readable explanation",
-      "details": { "optional": "context" }
-    }
-  }
-}
-```
-
-**Note:** FastAPI wraps error responses in a `detail` field. For Pydantic validation errors, the format is different.
+## Endpoints
 
 ### GET /health
 
-**Purpose:** Health check for container orchestration
+Health check endpoint to verify the service is running.
 
-**Response (200 OK):**
+**Request**:
+
+- No parameters required
+- No authentication required
+
+**Response**: `200 OK`
 
 ```json
 {
@@ -140,40 +32,447 @@ NewsNewt is a Python 3.12 microservice providing an HTTP API for archiving and e
 }
 ```
 
+**Usage in n8n**:
+
+```
+HTTP Request Node:
+- Method: GET
+- URL: http://newsnewt:3000/health
+```
+
 ---
 
-## Error Handling
+### POST /scrape
 
-### Error Codes
+Scrape a web page with optional CSS selectors for targeted content extraction.
 
-| Code                 | HTTP Status | Description                    |
-| -------------------- | ----------- | ------------------------------ |
-| `INVALID_URL`        | 422         | URL is missing, malformed, or unsupported (Pydantic validation) |
-| `ARCHIVE_TIMEOUT`    | 500         | Archive operation exceeded timeout        |
-| `ARCHIVE_FAILURE`    | 500         | Archive service interaction failed        |
-| `EXTRACTION_FAILURE` | 500         | Article extraction failed                 |
-| `INTERNAL_ERROR`     | 500         | Unexpected/unhandled error                |
-
-### Error Response Format
-
-All errors follow a consistent envelope structure (wrapped in FastAPI's `detail` field):
+#### Request Schema
 
 ```json
 {
-  "detail": {
-    "error": {
-      "code": "ERROR_CODE",
-      "message": "Human-readable explanation",
-      "details": {
-        "url": "...",
-        "archive_service": "..."
-      }
+  "url": "string (required)",
+  "selectors": {
+    "field_name": {
+      "css": "string"
     }
+  },
+  "timeout_ms": "integer (optional)"
+}
+```
+
+**Parameters**:
+
+| Field                   | Type    | Required | Description                                        |
+| ----------------------- | ------- | -------- | -------------------------------------------------- |
+| `url`                   | string  | Yes      | Full URL to scrape (must include protocol)         |
+| `selectors`             | object  | No       | CSS selectors for content extraction               |
+| `selectors.<field>.css` | string  | No       | CSS selector for a specific field                  |
+| `timeout_ms`            | integer | No       | Maximum time to wait for response (default: 30000) |
+
+#### Response Schema
+
+**Success**: `200 OK`
+
+```json
+{
+  "url": "string",
+  "data": {
+    "field_name": "extracted value"
+  },
+  "meta": {
+    "status": 200,
+    "duration_ms": 1234
   }
 }
 ```
 
-**Note:** Pydantic validation errors (e.g., invalid URL format) return a different structure with `detail` containing a list of validation errors.
+**Error**: `4xx` or `5xx`
+
+```json
+{
+  "url": "string",
+  "data": {},
+  "meta": {
+    "status": 422,
+    "duration_ms": 1234,
+    "error_type": "captcha_detected",
+    "error_message": "CAPTCHA detected on page"
+  }
+}
+```
+
+**Response Fields**:
+
+| Field                | Type         | Description                                       |
+| -------------------- | ------------ | ------------------------------------------------- |
+| `url`                | string       | The URL that was scraped                          |
+| `data`               | object       | Extracted content as key-value pairs              |
+| `meta.status`        | integer      | HTTP-like status code for the scrape operation    |
+| `meta.duration_ms`   | integer      | Time taken to complete the scrape in milliseconds |
+| `meta.error_type`    | string\|null | Error type if scraping failed                     |
+| `meta.error_message` | string\|null | Detailed error message if scraping failed         |
+
+#### Status Codes
+
+| Code  | Meaning          | Description                     |
+| ----- | ---------------- | ------------------------------- |
+| `200` | Success          | Page scraped successfully       |
+| `408` | Timeout          | Request exceeded timeout limit  |
+| `422` | CAPTCHA Detected | CAPTCHA found on target page    |
+| `500` | Scraping Error   | General scraping error occurred |
+
+#### Error Types
+
+| Error Type         | Status Code | Description                              |
+| ------------------ | ----------- | ---------------------------------------- |
+| `captcha_detected` | 422         | A CAPTCHA was detected on the page       |
+| `timeout`          | 408         | The scraping operation timed out         |
+| `scraping_error`   | 500         | A general error occurred during scraping |
+
+---
+
+## Request Examples
+
+### Basic Scrape (No Selectors)
+
+When no selectors are provided, the service attempts to extract common page elements:
+
+```bash
+curl -X POST http://localhost:3000/scrape \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://example.com/article"
+  }'
+```
+
+**Response**:
+
+```json
+{
+  "url": "https://example.com/article",
+  "data": {
+    "title": "Example Article Title",
+    "content": "Article content text..."
+  },
+  "meta": {
+    "status": 200,
+    "duration_ms": 2341
+  }
+}
+```
+
+### Targeted Extraction with Selectors
+
+Extract specific fields using CSS selectors:
+
+```bash
+curl -X POST http://localhost:3000/scrape \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://example.com/article",
+    "selectors": {
+      "title": {"css": "h1.article-title"},
+      "author": {"css": ".author-name"},
+      "date": {"css": "time"},
+      "content": {"css": "article.content"},
+      "tags": {"css": ".tag"}
+    }
+  }'
+```
+
+**Response**:
+
+```json
+{
+  "url": "https://example.com/article",
+  "data": {
+    "title": "Example Article Title",
+    "author": "John Doe",
+    "date": "2024-12-02",
+    "content": "Full article text...",
+    "tags": "Technology"
+  },
+  "meta": {
+    "status": 200,
+    "duration_ms": 2156
+  }
+}
+```
+
+### Meta Tag Extraction
+
+Extract content from meta tags:
+
+```bash
+curl -X POST http://localhost:3000/scrape \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://example.com/article",
+    "selectors": {
+      "title": {"css": "meta[property=\"og:title\"]"},
+      "description": {"css": "meta[property=\"og:description\"]"},
+      "image": {"css": "meta[property=\"og:image\"]"}
+    }
+  }'
+```
+
+### Custom Timeout
+
+Set a longer timeout for slow-loading pages:
+
+```bash
+curl -X POST http://localhost:3000/scrape \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://slow-site.example.com",
+    "timeout_ms": 60000
+  }'
+```
+
+### CAPTCHA Response Example
+
+When a CAPTCHA is detected:
+
+```json
+{
+  "url": "https://protected-site.example.com",
+  "data": {},
+  "meta": {
+    "status": 422,
+    "duration_ms": 1823,
+    "error_type": "captcha_detected",
+    "error_message": "CAPTCHA detected on page"
+  }
+}
+```
+
+---
+
+## n8n Integration
+
+### HTTP Request Node Configuration
+
+**Basic Configuration**:
+
+```
+Method: POST
+URL: http://newsnewt:3000/scrape
+Content Type: application/json
+```
+
+**Body (JSON)**:
+
+```json
+{
+  "url": "{{$json.article_url}}",
+  "selectors": {
+    "title": { "css": "h1" },
+    "content": { "css": "article" }
+  }
+}
+```
+
+**Response Handling**:
+
+- Response Format: JSON
+- Extract nested data: `{{$json.data.title}}`
+- Check for errors: `{{$json.meta.error_type}}`
+
+### Workflow Example
+
+```
+Trigger (Schedule)
+    ↓
+Set URLs Node (list of URLs to scrape)
+    ↓
+Loop over items
+    ↓
+HTTP Request (NewsNewt scrape)
+    ↓
+IF Node (check meta.status === 200)
+    ↓ Success           ↓ Error
+Store Data       Log Error / Retry
+```
+
+### Error Handling in n8n
+
+Use an IF node to check for errors:
+
+```javascript
+// Condition: Success
+{{$json.meta.status}} === 200
+
+// Condition: CAPTCHA
+{{$json.meta.error_type}} === "captcha_detected"
+
+// Condition: Timeout
+{{$json.meta.error_type}} === "timeout"
+```
+
+---
+
+## Extraction Strategies
+
+### Automatic Fallbacks
+
+When a selector fails to match, the service tries common alternatives:
+
+#### Title Fallbacks
+
+1. User-provided selector
+2. `h1`
+3. `.article-title`
+4. `.entry-title`
+5. `.post-title`
+6. `[itemprop='headline']`
+7. `meta[property='og:title']`
+
+#### Content Fallbacks
+
+1. User-provided selector
+2. `article`
+3. `main`
+4. `.article-body`
+5. `.entry-content`
+6. `.post-content`
+7. `[role='main']`
+8. `[itemprop='articleBody']`
+
+#### Author Fallbacks
+
+1. User-provided selector
+2. `.author`
+3. `.author-name`
+4. `[rel='author']`
+5. `[itemprop='author']`
+6. `meta[name='author']`
+
+#### Date Fallbacks
+
+1. User-provided selector
+2. `time`
+3. `.published-date`
+4. `.post-date`
+5. `[itemprop='datePublished']`
+6. `meta[property='article:published_time']`
+
+#### Description Fallbacks
+
+1. User-provided selector
+2. `.excerpt`
+3. `.description`
+4. `.summary`
+5. `meta[name='description']`
+6. `meta[property='og:description']`
+
+### Empty Results
+
+If no match is found for a field, an empty string is returned:
+
+```json
+{
+  "data": {
+    "missing_field": ""
+  }
+}
+```
+
+---
+
+## Popup Dismissal
+
+The service automatically attempts to dismiss common popups and cookie banners before extraction.
+
+### Button Text Patterns
+
+Searches for buttons containing:
+
+- "Accept"
+- "Accept all"
+- "Agree"
+- "OK"
+- "Allow"
+- "Got it"
+- "I agree"
+- "Continue"
+- "Consent"
+- "Allow all"
+
+### Close Button Selectors
+
+Attempts to click:
+
+- `.modal-close`
+- `.popup-close`
+- `.cookie-close`
+- `[aria-label*='close']`
+- `[aria-label*='dismiss']`
+- `.close-button`
+- `button.close`
+- `[data-dismiss='modal']`
+
+### Banner Removal
+
+Directly removes common banner elements:
+
+- `#cookie-banner`
+- `#cookie-notice`
+- `.cookie-notice`
+- `.cookie-banner`
+- `.gdpr-banner`
+- `.consent-banner`
+
+**Note**: Popup dismissal is best-effort. Some sites may have custom implementations that aren't covered.
+
+---
+
+## CAPTCHA Detection
+
+The service detects CAPTCHAs using multiple methods:
+
+### Keyword Detection
+
+Scans page text for:
+
+- "captcha"
+- "recaptcha"
+- "hcaptcha"
+- "verify you are human"
+- "verify you're human"
+- "security check"
+- "prove you're not a robot"
+- "cloudflare"
+
+### Iframe Detection
+
+Checks for CAPTCHA-related iframes:
+
+- `google.com/recaptcha`
+- `hcaptcha.com`
+
+### Element Detection
+
+Searches for CAPTCHA elements:
+
+- `.g-recaptcha`
+- `#g-recaptcha`
+- `.h-captcha`
+- `#h-captcha`
+- `[data-sitekey]`
+- `iframe[src*='recaptcha']`
+- `iframe[src*='hcaptcha']`
+
+When detected, returns:
+
+```json
+{
+  "meta": {
+    "status": 422,
+    "error_type": "captcha_detected",
+    "error_message": "CAPTCHA detected on page"
+  }
+}
+```
 
 ---
 
@@ -181,210 +480,266 @@ All errors follow a consistent envelope structure (wrapped in FastAPI's `detail`
 
 ### Environment Variables
 
-| Variable                   | Default        | Description                                 |
-| -------------------------- | -------------- | ------------------------------------------- |
-| `NEWSNEWT_ARCHIVE_SERVICE` | `"archive_is"` | Default archive backend                     |
-| `NEWSNEWT_TIMEOUT_SECONDS` | `300`          | Global timeout per request (seconds)        |
-| `NEWSNEWT_LOG_LEVEL`       | `"INFO"`       | Log verbosity (DEBUG, INFO, WARNING, ERROR) |
-| `TZ`                       | -              | Timezone for logs (recommended: UTC)        |
+Configure the service via environment variables in `compose.yml`:
 
-### Configuration Files
+#### CRAWL_CONCURRENCY
 
-- **Location:** `config/` directory
-- **`.env.sample`:** Template with all variables documented
-- **`.env`:** Actual configuration (git-ignored)
+Maximum number of concurrent scraping operations.
+
+- **Type**: Integer
+- **Default**: `3`
+- **Range**: `1-10` (higher values require more resources)
+- **Example**: `CRAWL_CONCURRENCY=5`
+
+**Impact**:
+
+- Low (1-2): Conservative, lower resource usage, slower throughput
+- Medium (3-5): Balanced for typical workloads
+- High (6+): Aggressive, requires significant CPU/memory
+
+#### LOG_LEVEL
+
+Logging verbosity level.
+
+- **Type**: String
+- **Default**: `INFO`
+- **Options**: `DEBUG`, `INFO`, `WARNING`, `ERROR`
+- **Example**: `LOG_LEVEL=DEBUG`
+
+**Levels**:
+
+- `DEBUG`: Detailed diagnostic information
+- `INFO`: General informational messages
+- `WARNING`: Warning messages for potential issues
+- `ERROR`: Error messages only
+
+#### PLAYWRIGHT_HEADLESS
+
+Run browser in headless mode (no visible UI).
+
+- **Type**: Boolean
+- **Default**: `true`
+- **Options**: `true`, `false`
+- **Example**: `PLAYWRIGHT_HEADLESS=false`
+
+**Usage**:
+
+- `true`: Production mode, no GUI (default)
+- `false`: Development/debugging, visible browser window
+
+#### ENABLE_STEALTH
+
+Enable stealth mode to avoid CAPTCHA detection.
+
+- **Type**: Boolean
+- **Default**: `true`
+- **Options**: `true`, `false`
+- **Example**: `ENABLE_STEALTH=true`
+
+**Features**:
+
+- Modifies browser fingerprint
+- Hides automation indicators
+- Mimics real user behavior
+- Reduces CAPTCHA trigger rate
+
+**When to disable**:
+
+- Debugging stealth-related issues
+- Sites that don't implement detection
+- When using authenticated sessions
 
 ---
 
 ## Logging
 
-### Log Structure
-
-All logs include:
-
-- Timestamp (ISO 8601 UTC)
-- Log level
-- URL (sanitized if needed)
-- Archive service and flags
-- Outcome (success or error code)
-- Request duration
-
-### Log Location
-
-- **Directory:** `logs/` (root level)
-- **File:** `newsnewt.log` (rotating)
-- **Rotation:** Configurable size and backup count
-
-### Log Levels
-
-- **DEBUG:** Detailed diagnostic information
-- **INFO:** General informational messages (default)
-- **WARNING:** Warning messages
-- **ERROR:** Error conditions
-
----
-
-## Request Processing Flow
+### Log Format
 
 ```
-1. Receive POST /article request
-   ↓
-2. Validate request (URL format, optional fields)
-   ↓
-3. Resolve archive service (from request or env)
-   ↓
-4. Apply rate limiting (5-second minimum interval)
-   ↓
-5. Archive URL (or find existing snapshot)
-   ├─→ On timeout: Return ARCHIVE_TIMEOUT error (500)
-   ├─→ On failure: Return ARCHIVE_FAILURE error (500)
-   └─→ On success: Continue
-   ↓
-6. Fetch archived HTML from archive URL
-   ↓
-7. Extract article content using trafilatura
-   ├─→ On failure: Return EXTRACTION_FAILURE error (500)
-   └─→ On success: Continue
-   ↓
-8. Format and return JSON response (200 OK)
+TIMESTAMP - LOGGER_NAME - LEVEL - MESSAGE
 ```
 
----
-
-## File Structure
+**Example**:
 
 ```
-NewsNewt/
-├── src/
-│   └── newsnewt/
-│       ├── __init__.py
-│       ├── api.py              # FastAPI application and endpoints
-│       ├── archive.py          # Archive.is integration
-│       ├── config.py           # Configuration management
-│       ├── extractor.py        # Content extraction (trafilatura)
-│       ├── logging_config.py  # Logging setup
-│       ├── main.py             # Application entry point
-│       ├── models.py           # Pydantic models
-│       ├── rate_limit.py       # Rate limiting for Archive.is
-│       └── utils.py            # Utility functions
-├── tests/
-│   ├── unit/
-│   │   ├── test_config.py
-│   │   ├── test_rate_limit.py
-│   │   └── test_utils.py
-│   └── integration/
-│       └── test_api.py
-├── config/
-│   └── .env.sample             # Configuration template
-├── logs/
-│   └── newsnewt.log            # Application logs (rotating)
-├── docs/                       # Documentation
-├── dockerfile                  # Docker container definition
-├── compose.yml                 # Docker Compose configuration
-├── pyproject.toml              # Python project configuration
-└── README.md                   # Project documentation
+2024-12-02 10:30:45 - app.main - INFO - Received scrape request abc123 for URL: https://example.com
+2024-12-02 10:30:47 - app.main - INFO - Processing request abc123 for URL: https://example.com
+2024-12-02 10:30:48 - app.extraction - DEBUG - Clicked button with text: Accept
+2024-12-02 10:30:49 - app.extraction - DEBUG - Extracted title using provided selector
+2024-12-02 10:30:49 - app.main - INFO - Request abc123 completed successfully
 ```
 
----
+### Log Locations
 
-## Dependencies
+- **Console/STDOUT**: All logs (captured by Docker)
+- **File**: `/app/logs/` directory (mounted as volume)
 
-### Core Dependencies
+### Log Levels by Component
 
-- **fastapi**: HTTP framework
-- **pydantic**: Data validation and models
-- **httpx**: HTTP client for Archive.is integration and fetching archived pages
-- **trafilatura**: Article content extraction
-- **uvicorn**: ASGI server
-- **python-dotenv**: Environment variable management
-
-### Development Dependencies
-
-- **black** (>=25.11.0): Code formatting
-- **ruff** (>=0.14.6): Linting and code quality
-- **pytest**: Testing framework
-- **pytest-asyncio**: Async testing support (if using FastAPI)
+| Component        | DEBUG             | INFO                  | WARNING        | ERROR               |
+| ---------------- | ----------------- | --------------------- | -------------- | ------------------- |
+| `app.main`       | Request details   | Request lifecycle     | Config issues  | Fatal errors        |
+| `app.extraction` | Selector attempts | Successful extraction | Fallback usage | Extraction failures |
+| `crawlee`        | Internal state    | Crawler events        | Retries        | Crashes             |
 
 ---
 
-## Testing Strategy
+## Performance
 
-### Test Structure
+### Typical Timings
 
-The project uses pytest with comprehensive test coverage:
+| Scenario                 | Duration                  |
+| ------------------------ | ------------------------- |
+| Simple static page       | 500-1500ms                |
+| News article (medium JS) | 1500-3000ms               |
+| Heavy SPA                | 3000-5000ms               |
+| Slow/timeout site        | 30000ms (default timeout) |
 
-**Unit Tests (33 tests):**
-- URL validation and normalization
-- Configuration loading and validation
-- Archive service selection logic
-- Rate limiting
-- Domain extraction
+### Resource Usage (per concurrent scrape)
 
-**Integration Tests (10 tests):**
-- Full POST /article workflow (mocked)
-- Error scenarios (all error codes)
-- Health check endpoint
-- Root endpoint
+| Resource | Usage                    |
+| -------- | ------------------------ |
+| CPU      | 200-300% (per browser)   |
+| Memory   | 200-500 MB (per browser) |
+| Disk I/O | Minimal                  |
+| Network  | Depends on page size     |
 
-**Coverage:** 63% overall, 90%+ on critical paths
+### Optimization Tips
 
-See [Testing Documentation](TESTING.md) for detailed information.
+1. **Increase Concurrency**: If CPU/memory allows, raise `CRAWL_CONCURRENCY`
+2. **Reduce Timeout**: Lower `timeout_ms` for faster failure on slow sites
+3. **Disable Stealth**: If not needed, set `ENABLE_STEALTH=false` for slight speed boost
+4. **Target Selectors**: Provide specific selectors to avoid fallback attempts
 
 ---
 
-## Deployment
+## Troubleshooting
 
-### Docker Container
+### Common Issues
 
-- **Base Image:** Python 3.12 slim
-- **Port:** 8000 (internal network only)
-- **Health Check:** GET /health
-- **Volumes:** `logs/` directory for log persistence (optional)
+#### 1. CAPTCHA Detected on Every Request
 
-### Docker Compose
+**Symptoms**: All requests return `error_type: "captcha_detected"`
+
+**Solutions**:
+
+- Ensure `ENABLE_STEALTH=true`
+- Reduce `CRAWL_CONCURRENCY` to avoid rate limiting
+- Check if target site requires authentication
+- Consider rotating IP addresses or using proxies
+
+#### 2. Timeout Errors
+
+**Symptoms**: Requests return `error_type: "timeout"`
+
+**Solutions**:
+
+- Increase `timeout_ms` in request body
+- Check network connectivity
+- Verify target site is accessible
+- Reduce `CRAWL_CONCURRENCY` if system is overloaded
+
+#### 3. Empty Data Returned
+
+**Symptoms**: `data: {}` or empty field values
+
+**Solutions**:
+
+- Verify selectors match page structure
+- Check if page content loads via JavaScript (needs time)
+- Try more specific or alternative selectors
+- Enable `LOG_LEVEL=DEBUG` to see extraction attempts
+
+#### 4. Service Crashes or Restarts
+
+**Symptoms**: Container exits or health check fails
+
+**Solutions**:
+
+- Check Docker logs: `docker logs newsnewt`
+- Verify sufficient memory allocated
+- Reduce `CRAWL_CONCURRENCY`
+- Check for Playwright installation issues
+
+### Debug Mode
+
+Enable debug logging:
 
 ```yaml
-services:
-  newsnewt:
-    build: .
-    ports:
-      - "8000:8000" # Internal network only
-    environment:
-      - NEWSNEWT_ARCHIVE_SERVICE=archive_is
-      - NEWSNEWT_TIMEOUT_SECONDS=300
-      - NEWSNEWT_LOG_LEVEL=INFO
-      - TZ=UTC
-    networks:
-      - private_network
+environment:
+  - LOG_LEVEL=DEBUG
+```
+
+Then check logs:
+
+```bash
+docker logs -f newsnewt
 ```
 
 ---
 
-## Security Considerations
+## Development
 
-1. **Network Isolation:** Service runs in private Docker network only
-2. **No Authentication:** Network-level security assumed
-3. **Input Validation:** All URLs validated before processing
-4. **Timeout Protection:** Prevents resource exhaustion
-5. **Error Information:** Sanitized error messages (no sensitive data)
+### Local Development Setup
+
+1. **Install dependencies**:
+
+```bash
+uv sync
+```
+
+2. **Install Playwright**:
+
+```bash
+uv run playwright install chromium --with-deps
+```
+
+3. **Run locally**:
+
+```bash
+uv run uvicorn app.main:app --host 0.0.0.0 --port 3000 --reload
+```
+
+4. **Test endpoint**:
+
+```bash
+curl http://localhost:3000/health
+```
+
+### Running Tests
+
+```bash
+uv run pytest
+```
+
+### Code Quality
+
+```bash
+# Linting
+uv run ruff check src/
+
+# Formatting (check)
+uv run ruff format --check src/
+```
 
 ---
 
-## Performance Considerations
+## API Versioning
 
-1. **Timeouts:** Configurable per-request timeout (default 300s)
-2. **Batch Processing:** Designed for n8n batch workflows
-3. **No Caching:** Stateless service, no request caching
-4. **Resource Usage:** Minimal memory footprint, single-threaded
+Current version: **v0.1.0**
+
+The API is currently unversioned. Breaking changes will be documented in release notes.
 
 ---
 
-## Rate Limiting
+## Limits and Constraints
 
-NewsNewt includes built-in rate limiting for Archive.is:
-- Minimum 5-second interval between archive requests
-- Prevents 429 (Too Many Requests) errors
-- Async-safe with lock mechanism
-- Automatic delay when needed
+| Limit                  | Value                              | Notes                     |
+| ---------------------- | ---------------------------------- | ------------------------- |
+| Max concurrent scrapes | Configured via `CRAWL_CONCURRENCY` | Default: 3                |
+| Default timeout        | 30 seconds                         | Configurable per request  |
+| Max URL length         | 2048 characters                    | Browser limitation        |
+| Response size          | Unlimited                          | Depends on page content   |
+| Request rate           | Unlimited                          | No built-in rate limiting |
 
-See `src/newsnewt/rate_limit.py` for implementation details.
+**Note**: No authentication or rate limiting is implemented. Deploy behind a reverse proxy if these features are required.
