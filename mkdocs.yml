@@ -21,6 +21,7 @@ markdown_extensions:
 # Page tree
 nav:
   - Home: index.md
+  - Project Brief: project-brief.md
   - Documentation:
       - Architecture: architecture.md
       - Technical Reference: technical.md

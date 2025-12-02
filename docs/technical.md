@@ -555,18 +555,83 @@ Enable stealth mode to avoid CAPTCHA detection.
 
 ### Log Format
 
+All logs follow a consistent format for easy parsing:
+
 ```
 TIMESTAMP - LOGGER_NAME - LEVEL - MESSAGE
 ```
 
-**Example**:
+**Example Startup Logs**:
 
 ```
-2024-12-02 10:30:45 - app.main - INFO - Received scrape request abc123 for URL: https://example.com
-2024-12-02 10:30:47 - app.main - INFO - Processing request abc123 for URL: https://example.com
-2024-12-02 10:30:48 - app.extraction - DEBUG - Clicked button with text: Accept
-2024-12-02 10:30:49 - app.extraction - DEBUG - Extracted title using provided selector
-2024-12-02 10:30:49 - app.main - INFO - Request abc123 completed successfully
+2024-12-02 10:30:00 - app.main - INFO - ============================================================
+2024-12-02 10:30:00 - app.main - INFO - NewsNewt Scraper Service Starting
+2024-12-02 10:30:00 - app.main - INFO - ============================================================
+2024-12-02 10:30:00 - app.main - INFO - Configuration:
+2024-12-02 10:30:00 - app.main - INFO -   - Log Level: INFO
+2024-12-02 10:30:00 - app.main - INFO -   - Headless Mode: True
+2024-12-02 10:30:00 - app.main - INFO -   - Stealth Mode: True
+2024-12-02 10:30:00 - app.main - INFO -   - Max Concurrency: 3
+2024-12-02 10:30:00 - app.main - INFO - ------------------------------------------------------------
+2024-12-02 10:30:01 - app.main - INFO - ✓ Stealth mode enabled - Anti-detection measures active
+2024-12-02 10:30:01 - app.main - INFO - ✓ Crawlee crawler initialized successfully
+2024-12-02 10:30:01 - app.main - INFO - ============================================================
+2024-12-02 10:30:01 - app.main - INFO - 🚀 NewsNewt ready to accept scraping requests on port 3000
+2024-12-02 10:30:01 - app.main - INFO - ============================================================
+```
+
+**Example Successful Scrape (INFO level)**:
+
+```
+2024-12-02 10:30:45 - app.main - INFO - 📥 [abc-123] New scrape request - URL: https://example.com/article | Selectors: 2 | Timeout: 30.0s
+2024-12-02 10:30:46 - app.main - INFO - 🔄 [abc-123] Processing: https://example.com/article
+2024-12-02 10:30:47 - app.extraction - INFO - 🍪 Dismissed popup - Clicked button: 'Accept'
+2024-12-02 10:30:47 - app.extraction - INFO - ✓ Popup dismissal complete - Clicked: 1, Removed: 0
+2024-12-02 10:30:47 - app.extraction - INFO - ✓ Field 'title': Found with provided selector (length: 45)
+2024-12-02 10:30:48 - app.extraction - INFO - ✓ Field 'content': Found with provided selector (length: 3421)
+2024-12-02 10:30:48 - app.extraction - INFO - 📊 Extraction summary: 2/2 field(s) extracted successfully
+2024-12-02 10:30:48 - app.main - INFO - ✅ [abc-123] Success - Extracted 2 field(s) in 2156ms
+2024-12-02 10:30:48 - app.main - INFO - 📤 [abc-123] Returning successful response - Duration: 2156ms
+```
+
+**Example with Fallbacks (DEBUG level)**:
+
+```
+2024-12-02 10:31:00 - app.main - DEBUG - [def-456] Waiting for page to load...
+2024-12-02 10:31:01 - app.main - DEBUG - [def-456] Page loaded successfully
+2024-12-02 10:31:01 - app.main - DEBUG - [def-456] Attempting to dismiss popups...
+2024-12-02 10:31:01 - app.extraction - DEBUG - Scanning for popup buttons with 10 text patterns...
+2024-12-02 10:31:01 - app.extraction - DEBUG - No popups or banners found on page
+2024-12-02 10:31:01 - app.main - DEBUG - [def-456] Checking for CAPTCHA...
+2024-12-02 10:31:01 - app.extraction - DEBUG - Starting CAPTCHA detection scan...
+2024-12-02 10:31:01 - app.extraction - DEBUG - ✓ No CAPTCHA detected - page is accessible
+2024-12-02 10:31:01 - app.main - DEBUG - [def-456] No CAPTCHA detected
+2024-12-02 10:31:01 - app.extraction - DEBUG - Extracting 1 field(s) with custom selectors
+2024-12-02 10:31:01 - app.extraction - DEBUG - Trying field 'title' with selector: .article-heading
+2024-12-02 10:31:01 - app.extraction - DEBUG - Selector failed for 'title': Element not found
+2024-12-02 10:31:01 - app.extraction - DEBUG - Trying 6 fallback(s) for 'title'
+2024-12-02 10:31:01 - app.extraction - INFO - ✓ Field 'title': Found with fallback #1: h1 (length: 52)
+2024-12-02 10:31:01 - app.extraction - INFO - 📊 Extraction summary: 1/1 field(s) extracted successfully
+```
+
+**Example CAPTCHA Detection**:
+
+```
+2024-12-02 10:32:00 - app.main - INFO - 🔄 [ghi-789] Processing: https://protected-site.com
+2024-12-02 10:32:01 - app.extraction - DEBUG - Starting CAPTCHA detection scan...
+2024-12-02 10:32:01 - app.extraction - WARNING - 🛡️  CAPTCHA DETECTED - Keyword found in page text: 'recaptcha'
+2024-12-02 10:32:01 - app.extraction - INFO - 💡 Suggestion: Enable stealth mode or reduce concurrency to avoid CAPTCHAs
+2024-12-02 10:32:01 - app.main - WARNING - 🛡️  [ghi-789] CAPTCHA detected - Try enabling stealth mode or reduce concurrency
+2024-12-02 10:32:01 - app.main - INFO - 📤 [ghi-789] Returning error response - Status: 422 | Type: captcha_detected
+```
+
+**Example Timeout**:
+
+```
+2024-12-02 10:33:00 - app.main - INFO - 📥 [jkl-012] New scrape request - URL: https://slow-site.com | Selectors: 0 | Timeout: 10.0s
+2024-12-02 10:33:00 - app.main - DEBUG - [jkl-012] Queueing request to crawler...
+2024-12-02 10:33:00 - app.main - DEBUG - [jkl-012] Waiting for result (timeout: 10.0s)...
+2024-12-02 10:33:10 - app.main - ERROR - ⏱️  [jkl-012] Timeout after 10.0s - Try increasing timeout_ms or check if site is responsive
 ```
 
 ### Log Locations
@@ -614,6 +679,35 @@ TIMESTAMP - LOGGER_NAME - LEVEL - MESSAGE
 ---
 
 ## Troubleshooting
+
+### Reading Log Messages
+
+The service uses emojis and clear messages to help diagnose issues quickly:
+
+| Emoji | Meaning | Level |
+| ----- | ------- | ----- |
+| 🚀 | Service started successfully | INFO |
+| 📥 | New scrape request received | INFO |
+| 🔄 | Processing page | INFO |
+| 🍪 | Popup/cookie banner action | INFO |
+| ✓ | Success/completion marker | INFO/DEBUG |
+| ✅ | Successful extraction | INFO |
+| 📤 | Sending response | INFO |
+| 📊 | Statistics/summary | INFO |
+| ⚠️  | Warning or missing data | WARNING |
+| 🛡️  | CAPTCHA detected | WARNING |
+| 💡 | Helpful suggestion | INFO |
+| ❌ | Error occurred | ERROR |
+| ⏱️  | Timeout occurred | ERROR |
+| 🛑 | Shutdown initiated | INFO |
+
+**Request IDs**: Every request has a unique ID (e.g., `[abc-123]`) that appears in all related log messages, making it easy to trace a request through its lifecycle.
+
+**Log Levels**:
+- `DEBUG`: Detailed step-by-step execution (enable with `LOG_LEVEL=DEBUG`)
+- `INFO`: Normal operations and request lifecycle
+- `WARNING`: Potential issues (CAPTCHAs, missing data, fallbacks)
+- `ERROR`: Actual failures (timeouts, exceptions)
 
 ### Common Issues
 

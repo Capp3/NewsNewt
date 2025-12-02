@@ -1,174 +1,237 @@
+# NewsNewt
 
-## Project overview
+**Crawlee-based scraping microservice for n8n**
 
-Build a self‑hosted “scraping micro‑API” that exposes a small set of HTTP endpoints (FastAPI) which internally use Crawlee for Python with PlaywrightCrawler to fetch and extract structured data from web pages, returning JSON only.[1][2]
-The service runs in Docker (via docker‑compose) and is consumed from n8n using the HTTP Request node with JSON request/response.[3][4][1]
+A simple, self-hosted web scraping microservice designed for integration with n8n workflows. Built with FastAPI and Crawlee, featuring Playwright-powered JavaScript rendering, intelligent content extraction, and automatic popup handling.
 
-## Core requirements
+## Features
 
-- **Self‑hosted service**:
-  - Runs as a Docker container, orchestrated via `docker-compose.yml`.[5]
-  - Exposes one port (e.g. `8080`) for FastAPI.
+- 🎭 **Playwright-Powered**: Full JavaScript rendering for modern web applications
+- 🥷 **Stealth Mode**: Configurable anti-detection measures to reduce CAPTCHA triggers
+- 🎯 **Intelligent Extraction**: Flexible CSS selector matching with automatic fallbacks
+- 🍪 **Popup Handling**: Automatic dismissal of cookie banners and popups
+- 🛡️ **CAPTCHA Detection**: Identifies CAPTCHAs and returns structured error responses
+- 🔌 **n8n Optimized**: JSON-only API designed for HTTP Request node integration
+- 🐳 **Docker Native**: Single-container deployment via docker-compose
 
-- **Scraping capabilities**:
-  - Uses **Crawlee for Python** with **PlaywrightCrawler** for JS‑heavy pages.[2]
-  - Supports:
-    - Single‑URL scrape (primary use case).
-    - Optional small multi‑page crawl (e.g. follow article pagination or next links).
+## Quick Start
 
-- **Output format**:
-  - Always responds with `Content-Type: application/json`.
-  - For each request returns:
-    - `url`
-    - `data` (structured fields)
-    - `meta` (status code, timestamp, duration, debug info).
+### Prerequisites
 
-- **n8n integration**:
-  - Optimized for the n8n HTTP Request node: POST with JSON body, response parsed as JSON.[4][3]
-  - Stable URL paths and simple authentication (API key header or basic token).
+- Docker and Docker Compose installed
+- Basic understanding of n8n HTTP Request nodes (if using n8n)
 
-## API design
+### Installation
 
-All endpoints are `application/json` in and out.
+1. **Clone the repository**:
 
-1. `POST /scrape`
-   - **Purpose**: Scrape a single page with user‑defined selectors.
-   - Request body:
-     - `url` (string, required)
-     - `selectors` (object, optional): keys are field names, values indicate CSS/XPath or simple extraction rules, e.g.  
-       `{"title": {"css": "h1"}, "content": {"css": "article"}}`
-     - `render_js` (bool, default `true`): whether to use full Playwright rendering.
-     - `wait_until` (string, optional): e.g. `"networkidle"`.
-     - `timeout_ms` (int, optional).
-   - Response body:
-     - `url` (string)
-     - `data` (object): extracted fields (strings, arrays, etc.).
-     - `meta`: `{ "status": int, "fetched_at": string, "duration_ms": int, "selector_mode": "css" | "xpath" }`.
+```bash
+git clone <repository-url>
+cd NewsNewt
+```
 
-2. `POST /scrape-news`
-   - **Purpose**: Opinionated extraction for news/article pages.
-   - Request body:
-     - `url` (string)
-     - Optional `profile` (string): `"generic"` or a site‑specific profile.
-   - Response body (`data`):
-     - `title`, `subtitle`, `author`, `published_at`, `content`, `images`, `tags`.
+2. **Start the service**:
 
-3. `POST /crawl`
-   - **Purpose**: Shallow multi‑page crawl (e.g. section or tag pages).
-   - Request body:
-     - `start_url` (string)
-     - `max_pages` (int, default 10)
-     - `follow_patterns` (array of regex/substring to decide which links to enqueue)
-     - `selectors` (as in `/scrape`).
-   - Response body:
-     - `items`: array of `{ "url": string, "data": {...}, "meta": {...} }`.
-     - `meta`: crawl summary (pages_visited, pages_skipped, errors).
+```bash
+docker compose up -d
+```
 
-4. **Auth / health**
-   - `GET /health` – returns `{ "status": "ok" }` without auth.
-   - All other endpoints require `X-API-Key: <token>` or `Authorization: Bearer <token>`.
+The service will be available at `http://localhost:3000`
 
-## Internal architecture
+3. **Verify it's running**:
 
-- **FastAPI app**:
-  - Follows Crawlee’s “running in a web server” pattern with a `lifespan` function that instantiates and holds a crawler instance and a `requests_to_results` dict shared via `app.state`.[1]
-  - Async routes that:
-    - Validate payload.
-    - Register a future / callback with the crawler.
-    - Enqueue the URL and await completion.
-    - Return JSON.
+```bash
+curl http://localhost:3000/health
+```
 
-- **Crawlee setup**:
-  - Main crawler: `PlaywrightCrawler` with:
-    - Global concurrency limit.
-    - Global request timeout.
-    - Optional proxy settings.
-  - Default handler extracts:
-    - DOM snapshot and then applies selectors / news heuristics.
-  - For `/crawl`, use Crawlee’s request queue and link extraction logic (select anchors matching `follow_patterns`).[2]
+Expected response: `{"status": "ok"}`
 
-- **Extraction strategies**:
-  - **Selector mode**:
-    - If `selectors` provided, map each field to a CSS/XPath query and text/attribute extraction.
-  - **News mode**:
-    - Use heuristics: `<article>`, `<main>`, `meta[property="og:*"]`, date patterns, etc.
-    - Allow per‑site overrides via profile definitions.
+## Usage Examples
 
-- **Error handling**:
-  - Normalize network, timeout, and DOM errors into JSON:
-    - `meta.error_type`, `meta.error_message`, `meta.http_status` (if available).
-  - Never return HTML or stack traces; useful debug info stays in logs.
+### Basic Scrape
 
-## Docker & deployment
+Scrape a webpage with automatic content extraction:
 
-- **Dockerfile**:
-  - Base `python:3.12-slim` (or similar).
-  - Install system libraries required for Playwright (Chromium, fonts, etc.).
-  - Install Python deps: `fastapi[standard]`, `crawlee`, `playwright`, plus any extras.[1][2]
-  - Run `playwright install chromium` in build stage or entrypoint.
+```bash
+curl -X POST http://localhost:3000/scrape \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://example.com/article"
+  }'
+```
 
-- **docker-compose.yml**:
-  - Single service `scraper-api`:
-    - `build: .`
-    - `ports: ["8080:8080"]`
-    - `environment`: `API_KEY`, `CRAWL_CONCURRENCY`, `PLAYWRIGHT_HEADLESS=true`, proxy settings.
-    - Optional resource limits (CPU/memory).
-  - (Optional) Attach a shared network and volume if logs or cache are needed.
+### Scrape with Selectors
 
-- **Runtime**:
-  - ASGI server: `uvicorn app.main:app --host 0.0.0.0 --port 8080`.
-  - Healthcheck configured in Compose using `curl` to `/health`.
+Extract specific fields using CSS selectors:
 
-## n8n usage pattern
+```bash
+curl -X POST http://localhost:3000/scrape \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://example.com/article",
+    "selectors": {
+      "title": {"css": "h1"},
+      "author": {"css": ".author-name"},
+      "content": {"css": "article"}
+    }
+  }'
+```
 
-- **HTTP Request node configuration**:[3][4]
-  - Method: `POST`.
-  - URL: e.g. `http://scraper-api:8080/scrape` (inside Docker network) or external host.
-  - Authentication: custom header `X-API-Key`.
-  - Body:
-    - Mode: JSON.
-    - Example body:
-      ```json
-      {
-        "url": "https://example.com/news/123",
-        "selectors": {
-          "title": { "css": "h1.article-title" },
-          "content": { "css": "article" }
-        },
-        "render_js": true
-      }
-      ```
-  - Response:
-    - Response format: JSON.
-    - Use `Field Containing Data` if you want to only pass `data` or `items` into later nodes.
+### Response Format
 
-- **Typical workflows**:
-  - Trigger → HTTP Request (`/scrape-news`) → process JSON → store in DB.
-  - Loop over a list of URLs items, each going through `/scrape`.
+```json
+{
+  "url": "https://example.com/article",
+  "data": {
+    "title": "Article Title",
+    "author": "John Doe",
+    "content": "Article content..."
+  },
+  "meta": {
+    "status": 200,
+    "duration_ms": 2156
+  }
+}
+```
 
-## Non‑functional requirements
+## n8n Integration
 
-- **Performance & concurrency**:
-  - Configurable `CRAWL_CONCURRENCY` (e.g. 3–5) via env, exposed in Docker compose.[6]
-  - Typical single page scrape target: <3–5 seconds on average news site.
+1. Add an **HTTP Request** node to your workflow
+2. Configure:
+   - **Method**: POST
+   - **URL**: `http://newsnewt:3000/scrape` (same Docker network) or `http://localhost:3000/scrape`
+   - **Body Content Type**: JSON
+   - **Body**:
+     ```json
+     {
+       "url": "{{$json.url}}",
+       "selectors": {
+         "title": { "css": "h1" },
+         "content": { "css": "article" }
+       }
+     }
+     ```
+3. Access extracted data: `{{$json.data.title}}`, `{{$json.data.content}}`
 
-- **Observability**:
-  - Structured logs (JSON) per request: URL, status, duration, error.
-  - Optional basic metrics: total requests, failures, average latency.
+## Configuration
 
-- **Security**:
-  - Simple key‑based auth is acceptable for internal n8n use.
-  - Allow IP allow‑listing / reverse proxy hardening (Nginx, Traefik) out of scope but considered.
+The service is configured via environment variables in `compose.yml`. See [`config/.env.sample`](config/.env.sample) for detailed documentation.
 
-If you want, the next step can be a concrete skeleton: `app/main.py` with the FastAPI + Crawlee `lifespan` pattern, and sample Dockerfile and docker‑compose tailored to your stack.
+### Quick Reference
 
-[1](https://crawlee.dev/python/docs/guides/running-in-web-server)
-[2](https://crawlee.dev/python/docs/quick-start)
-[3](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.httprequest/)
-[4](https://n8n.io/integrations/http-request/)
-[5](https://stackoverflow.com/questions/65233680/run-fastapi-inside-docker-container)
-[6](https://www.reddit.com/r/n8n/comments/1l1i5mp/i_made_a_crawlee_server_built_specifically_for/)
-[7](https://www.youtube.com/watch?v=c5dw_jsGNBk)
-[8](https://automategeniushub.com/mastering-the-n8n-http-request-node/)
-[9](https://community.n8n.io/t/calling-a-python-script-from-n8n/82900)
-[10](https://docs.apify.com/platform/integrations/n8n/website-content-crawler)
+| Variable              | Default | Description                                    |
+| --------------------- | ------- | ---------------------------------------------- |
+| `CRAWL_CONCURRENCY`   | `3`     | Maximum concurrent scraping operations         |
+| `LOG_LEVEL`           | `INFO`  | Logging level (DEBUG, INFO, WARNING, ERROR)    |
+| `PLAYWRIGHT_HEADLESS` | `true`  | Run browser in headless mode                   |
+| `ENABLE_STEALTH`      | `true`  | Enable stealth mode to avoid CAPTCHA detection |
+
+### Customizing Configuration
+
+Create a `.env` file in the project root to override defaults:
+
+```bash
+cp config/.env.sample .env
+# Edit .env with your preferred values
+docker compose down && docker compose up -d
+```
+
+## API Endpoints
+
+### GET /health
+
+Health check endpoint. Returns `{"status": "ok"}` if service is running.
+
+### POST /scrape
+
+Scrape a URL with optional CSS selectors.
+
+**Request**:
+
+```json
+{
+  "url": "https://example.com",
+  "selectors": {
+    "field_name": { "css": "selector" }
+  },
+  "timeout_ms": 30000
+}
+```
+
+**Response**: See [Usage Examples](#usage-examples) above.
+
+For detailed API documentation, see [`docs/technical.md`](docs/technical.md).
+
+## Logging
+
+View logs in real-time:
+
+```bash
+docker compose logs -f newsnewt
+```
+
+Enable debug logging by setting `LOG_LEVEL=DEBUG` in your `.env` file or `compose.yml`.
+
+## Documentation
+
+- **[Getting Started](docs/index.md)**: Comprehensive guide with examples
+- **[Architecture](docs/architecture.md)**: System design and component overview
+- **[Technical Reference](docs/technical.md)**: Complete API documentation
+- **[Project Brief](docs/project-brief.md)**: Detailed project requirements and design
+
+## Troubleshooting
+
+### Service won't start
+
+Check logs:
+
+```bash
+docker compose logs newsnewt
+```
+
+### CAPTCHA detected
+
+- Ensure `ENABLE_STEALTH=true` in your configuration
+- Reduce `CRAWL_CONCURRENCY` to avoid rate limiting
+- Check if target site requires authentication
+
+### Empty data returned
+
+- Verify selectors match page structure
+- Enable `LOG_LEVEL=DEBUG` to see extraction attempts
+- Check if page content loads via JavaScript (may need more time)
+
+For more troubleshooting tips, see [`docs/technical.md`](docs/technical.md#troubleshooting).
+
+## Development
+
+### Local Development Setup
+
+```bash
+# Install dependencies
+uv sync
+
+# Install Playwright browsers
+uv run playwright install chromium --with-deps
+
+# Run locally
+uv run uvicorn app.main:app --host 0.0.0.0 --port 3000 --reload
+```
+
+### Building Documentation
+
+```bash
+# Install mkdocs (if not already installed)
+pip install mkdocs mkdocs-material
+
+# Serve documentation locally
+mkdocs serve
+```
+
+## License
+
+See [LICENSE](LICENSE) file for details.
+
+## Support
+
+For issues and feature requests, please use the project's issue tracker.

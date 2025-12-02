@@ -88,7 +88,9 @@ curl -X POST http://localhost:3000/scrape \
 
 ## Configuration
 
-The service is configured via environment variables in `compose.yml`:
+The service is configured via environment variables. See [`config/.env.sample`](../config/.env.sample) for a complete template with detailed descriptions.
+
+### Available Settings
 
 | Variable              | Default | Description                                    |
 | --------------------- | ------- | ---------------------------------------------- |
@@ -96,6 +98,100 @@ The service is configured via environment variables in `compose.yml`:
 | `LOG_LEVEL`           | `INFO`  | Logging level (DEBUG, INFO, WARNING, ERROR)    |
 | `PLAYWRIGHT_HEADLESS` | `true`  | Run browser in headless mode                   |
 | `ENABLE_STEALTH`      | `true`  | Enable stealth mode to avoid CAPTCHA detection |
+
+### Customizing Configuration
+
+#### For Docker Deployment (Default)
+
+The default values are set in `compose.yml` and work out of the box:
+
+```bash
+docker-compose up -d
+```
+
+To override defaults, create a `.env` file in the project root:
+
+```bash
+# Copy the sample configuration
+cp config/.env.sample .env
+
+# Edit with your preferred values
+nano .env
+```
+
+Then restart the service:
+
+```bash
+docker-compose down
+docker-compose up -d
+```
+
+#### For Local Development
+
+1. **Copy the sample configuration**:
+
+```bash
+cp config/.env.sample .env
+```
+
+2. **Customize settings**:
+
+```bash
+# Example local development settings
+LOG_LEVEL=DEBUG
+PLAYWRIGHT_HEADLESS=false
+ENABLE_STEALTH=false
+CRAWL_CONCURRENCY=1
+```
+
+3. **Run the service**:
+
+```bash
+uv run uvicorn app.main:app --host 0.0.0.0 --port 3000 --reload
+```
+
+#### Environment Variable Reference
+
+- **`CRAWL_CONCURRENCY`**: Controls parallelism
+  - Low (1-2): Conservative, slower but safer
+  - Medium (3-5): Balanced (recommended)
+  - High (6+): Aggressive, requires more resources
+
+- **`LOG_LEVEL`**: Controls verbosity
+  - `DEBUG`: Detailed diagnostic information
+  - `INFO`: Standard operation logs (recommended)
+  - `WARNING`: Only warnings and errors
+  - `ERROR`: Only error messages
+
+- **`PLAYWRIGHT_HEADLESS`**: Browser visibility
+  - `true`: No visible browser (production)
+  - `false`: Show browser window (debugging)
+
+- **`ENABLE_STEALTH`**: Anti-detection features
+  - `true`: Hide automation markers (recommended)
+  - `false`: Standard browser mode
+
+### Logging
+
+Logs are written to:
+- **Console**: Visible in `docker logs newsnewt`
+- **Files**: `./logs` directory (mounted volume)
+
+To view live logs:
+
+```bash
+docker logs -f newsnewt
+```
+
+To change log level to DEBUG for troubleshooting:
+
+```bash
+# Add to .env file
+LOG_LEVEL=DEBUG
+
+# Restart service
+docker-compose restart
+```
 
 ## API Endpoints
 

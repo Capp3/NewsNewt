@@ -8,7 +8,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
-from crawlee.playwright_crawler import PlaywrightCrawler, PlaywrightCrawlingContext
+from crawlee.crawlers import PlaywrightCrawler, PlaywrightCrawlingContext
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
@@ -64,7 +64,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     Initializes and holds the Crawlee PlaywrightCrawler instance
     and shared request tracking dictionary.
     """
-    logger.info("Starting Crawlee PlaywrightCrawler...")
+    logger.info("=" * 60)
+    logger.info("NewsNewt Scraper Service Starting")
+    logger.info("=" * 60)
 
     # Shared state for tracking requests and results
     app.state.requests_to_results: dict[str, dict[str, Any]] = {}
@@ -74,16 +76,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     headless = os.getenv("PLAYWRIGHT_HEADLESS", "true").lower() == "true"
     enable_stealth = os.getenv("ENABLE_STEALTH", "true").lower() == "true"
     max_concurrency = int(os.getenv("CRAWL_CONCURRENCY", "3"))
+    log_level = os.getenv("LOG_LEVEL", "INFO")
 
-    logger.info(
-        f"Crawler config: headless={headless}, stealth={enable_stealth}, concurrency={max_concurrency}"
-    )
+    logger.info("Configuration:")
+    logger.info(f"  - Log Level: {log_level}")
+    logger.info(f"  - Headless Mode: {headless}")
+    logger.info(f"  - Stealth Mode: {enable_stealth}")
+    logger.info(f"  - Max Concurrency: {max_concurrency}")
+    logger.info("-" * 60)
 
     async def request_handler(context: PlaywrightCrawlingContext) -> None:
         """Handle each crawl request."""
         request_id = context.request.user_data.get("request_id")
         if not request_id:
-            logger.error("No request_id in user_data")
+            logger.error("⚠️  Missing request_id in user_data - cannot process request")
             return
 
         start_time = time.time()
@@ -91,24 +97,40 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         url = context.request.url
 
         try:
-            logger.info(f"Processing request {request_id} for URL: {url}")
+            logger.info(f"🔄 [{request_id}] Processing: {url}")
+            logger.debug(f"[{request_id}] Waiting for page to load...")
 
             # Wait for page to load
             await page.wait_for_load_state("domcontentloaded")
+            logger.debug(f"[{request_id}] Page loaded successfully")
 
             # Dismiss popups and cookie banners
+            logger.debug(f"[{request_id}] Attempting to dismiss popups...")
             await dismiss_popups(page)
 
             # Check for CAPTCHA
+            logger.debug(f"[{request_id}] Checking for CAPTCHA...")
             if await detect_captcha(page):
                 raise ValueError("CAPTCHA detected on page")
+            logger.debug(f"[{request_id}] No CAPTCHA detected")
 
             # Extract data
             selectors = context.request.user_data.get("selectors", {})
+            selector_count = len(selectors) if selectors else 0
+            logger.debug(
+                f"[{request_id}] Extracting data with {selector_count} selector(s)..."
+            )
             data = await extract_with_fallbacks(page, selectors)
 
             # Calculate duration
             duration_ms = int((time.time() - start_time) * 1000)
+
+            # Count extracted fields
+            extracted_fields = [k for k, v in data.items() if v]
+            logger.info(
+                f"✅ [{request_id}] Success - Extracted {len(extracted_fields)} field(s) in {duration_ms}ms"
+            )
+            logger.debug(f"[{request_id}] Extracted fields: {list(data.keys())}")
 
             # Store result
             result = {
@@ -126,10 +148,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 app.state.pending_requests[request_id].set_result(result)
 
         except Exception as e:
-            logger.error(f"Error processing request {request_id}: {e}", exc_info=True)
             duration_ms = int((time.time() - start_time) * 1000)
-
             error_type = "captcha_detected" if "CAPTCHA" in str(e) else "scraping_error"
+
+            if error_type == "captcha_detected":
+                logger.warning(
+                    f"🛡️  [{request_id}] CAPTCHA detected - Try enabling stealth mode or reduce concurrency"
+                )
+            else:
+                logger.error(
+                    f"❌ [{request_id}] Error after {duration_ms}ms: {e}",
+                    exc_info=logger.isEnabledFor(logging.DEBUG),
+                )
+
             result = {
                 "url": url,
                 "data": {},
@@ -170,21 +201,32 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 await original_handler(context)
 
             crawler._request_handler = combined_handler
-            logger.info("Stealth mode enabled")
+            logger.info("✓ Stealth mode enabled - Anti-detection measures active")
         except ImportError:
             logger.warning(
-                "playwright-stealth not available, continuing without stealth mode"
+                "⚠️  playwright-stealth package not found - continuing without stealth mode"
             )
+            logger.warning(
+                "   To enable stealth mode, ensure playwright-stealth is installed"
+            )
+    else:
+        logger.info("ℹ️  Stealth mode disabled - Browser automation may be detectable")
 
     app.state.crawler = crawler
 
-    logger.info("Crawlee crawler initialized successfully")
+    logger.info("✓ Crawlee crawler initialized successfully")
+    logger.info("=" * 60)
+    logger.info("🚀 NewsNewt ready to accept scraping requests on port 3000")
+    logger.info("=" * 60)
 
     yield
 
     # Cleanup
-    logger.info("Shutting down crawler...")
+    logger.info("=" * 60)
+    logger.info("🛑 Shutting down NewsNewt scraper service...")
+    logger.info("=" * 60)
     # Crawlee handles cleanup automatically
+    logger.info("✓ Shutdown complete")
 
 
 # Initialize FastAPI app
@@ -219,7 +261,12 @@ async def scrape(request: ScrapeRequest) -> ScrapeResponse:
     import uuid
 
     request_id = str(uuid.uuid4())
-    logger.info(f"Received scrape request {request_id} for URL: {request.url}")
+    selector_count = len(request.selectors) if request.selectors else 0
+    timeout = (request.timeout_ms / 1000) if request.timeout_ms else 30.0
+
+    logger.info(
+        f"📥 [{request_id}] New scrape request - URL: {request.url} | Selectors: {selector_count} | Timeout: {timeout}s"
+    )
 
     # Create a future to track completion
     future: asyncio.Future = asyncio.Future()
@@ -232,18 +279,22 @@ async def scrape(request: ScrapeRequest) -> ScrapeResponse:
     }
 
     # Add request to crawler
+    logger.debug(f"[{request_id}] Queueing request to crawler...")
     await app.state.crawler.add_requests([{"url": request.url, "user_data": user_data}])
 
     # Run crawler if not already running
     if not app.state.crawler._has_started:
+        logger.debug(f"[{request_id}] Starting crawler...")
         asyncio.create_task(app.state.crawler.run())
 
     # Wait for result with timeout
-    timeout = (request.timeout_ms / 1000) if request.timeout_ms else 30.0
+    logger.debug(f"[{request_id}] Waiting for result (timeout: {timeout}s)...")
     try:
         result = await asyncio.wait_for(future, timeout=timeout)
     except asyncio.TimeoutError:
-        logger.error(f"Request {request_id} timed out after {timeout}s")
+        logger.error(
+            f"⏱️  [{request_id}] Timeout after {timeout}s - Try increasing timeout_ms or check if site is responsive"
+        )
         raise HTTPException(
             status_code=408,
             detail={
@@ -261,10 +312,18 @@ async def scrape(request: ScrapeRequest) -> ScrapeResponse:
         # Cleanup
         app.state.pending_requests.pop(request_id, None)
         app.state.requests_to_results.pop(request_id, None)
+        logger.debug(f"[{request_id}] Cleaned up request tracking")
 
     # Check for errors in result
     if result["meta"].get("error_type"):
         status_code = result["meta"]["status"]
+        error_type = result["meta"]["error_type"]
+        logger.info(
+            f"📤 [{request_id}] Returning error response - Status: {status_code} | Type: {error_type}"
+        )
         raise HTTPException(status_code=status_code, detail=result)
 
+    logger.info(
+        f"📤 [{request_id}] Returning successful response - Duration: {result['meta']['duration_ms']}ms"
+    )
     return ScrapeResponse(**result)

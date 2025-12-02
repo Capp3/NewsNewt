@@ -41,6 +41,9 @@ RUN mkdir -p /app/logs
 ENV PLAYWRIGHT_BROWSERS_PATH=/app/.playwright
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=0
 
+# Set Python path to include src directory
+ENV PYTHONPATH=/app/src:$PYTHONPATH
+
 # Copy project files (use .dockerignore to exclude unnecessary files)
 COPY . .
 
