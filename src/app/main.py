@@ -186,7 +186,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         max_requests_per_crawl=None,  # No limit
         max_request_retries=1,
         request_handler=request_handler,
-        launch_options={
+        browser_launch_options={
             "args": ["--no-sandbox", "--disable-setuid-sandbox"],  # Required for Docker
         },
     )
