@@ -1,335 +1,237 @@
 # NewsNewt
 
-A single-purpose Python microservice that archives news articles and extracts their content as structured JSON, optimized for LLM consumption in n8n workflows.
+**Crawlee-based scraping microservice for n8n**
 
-## Overview
-
-NewsNewt is designed to:
-
-- Accept a news article URL via HTTP POST
-- Archive the article using Archive.is/Archive.today
-- Extract the main article content from the archived page
-- Return clean, structured JSON optimized for downstream LLM processing
-
-The service runs as a private Dockerized microservice in controlled networks and is intentionally minimal and focused.
+A simple, self-hosted web scraping microservice designed for integration with n8n workflows. Built with FastAPI and Crawlee, featuring Playwright-powered JavaScript rendering, intelligent content extraction, and automatic popup handling.
 
 ## Features
 
-- **Archive-First Workflow:** Mandatory archiving ensures content preservation
-- **Structured JSON Output:** Optimized for LLM consumption
-- **Error Handling:** Clear error codes and structured error messages
-- **Health Checks:** Container orchestration support
-- **Comprehensive Logging:** Configurable log levels with rotation
-- **Rate Limiting:** Built-in rate limiting for Archive.is to prevent 429 errors
-
-## Architecture
-
-- **Language:** Python 3.12
-- **HTTP Framework:** FastAPI
-- **Archive Integration:** Archive.is (direct httpx integration)
-- **Content Extraction:** trafilatura
-- **Deployment:** Docker container in private network
+- 🎭 **Playwright-Powered**: Full JavaScript rendering for modern web applications
+- 🥷 **Stealth Mode**: Configurable anti-detection measures to reduce CAPTCHA triggers
+- 🎯 **Intelligent Extraction**: Flexible CSS selector matching with automatic fallbacks
+- 🍪 **Popup Handling**: Automatic dismissal of cookie banners and popups
+- 🛡️ **CAPTCHA Detection**: Identifies CAPTCHAs and returns structured error responses
+- 🔌 **n8n Optimized**: JSON-only API designed for HTTP Request node integration
+- 🐳 **Docker Native**: Single-container deployment via docker-compose
 
 ## Quick Start
 
 ### Prerequisites
 
-- Docker and Docker Compose
-- Ports 8000 available
+- Docker and Docker Compose installed
+- Basic understanding of n8n HTTP Request nodes (if using n8n)
 
-### Run with Docker Compose
+### Installation
+
+1. **Clone the repository**:
 
 ```bash
-# Clone the repository
 git clone <repository-url>
 cd NewsNewt
+```
 
-# Copy environment configuration (optional - uses defaults if not present)
-cp .env.sample .env
+2. **Start the service**:
 
-# Start the service
+```bash
 docker compose up -d
-
-# Check service status
-curl http://localhost:8000/health
-# Expected response: {"status":"ok"}
-
-# Stop the service
-docker compose down
 ```
 
-## API Usage
+The service will be available at `http://localhost:3000`
 
-### Health Check
+3. **Verify it's running**:
 
 ```bash
-GET /health
+curl http://localhost:3000/health
 ```
 
-**Response:**
+Expected response: `{"status": "ok"}`
 
-```json
-{
-  "status": "ok"
-}
-```
+## Usage Examples
 
-### Service Information
+### Basic Scrape
+
+Scrape a webpage with automatic content extraction:
 
 ```bash
-GET /
+curl -X POST http://localhost:3000/scrape \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://example.com/article"
+  }'
 ```
 
-**Response:**
+### Scrape with Selectors
 
-```json
-{
-  "service": "NewsNewt",
-  "version": "0.1.0",
-  "status": "running",
-  "endpoints": {
-    "health": "/health",
-    "article": "/article (POST)"
-  }
-}
-```
-
-### Archive and Extract Article
+Extract specific fields using CSS selectors:
 
 ```bash
-POST /article
-Content-Type: application/json
-
-{
-  "url": "https://example.com/news/article",
-  "force_archive": false,
-  "archive_service": "archive_is"
-}
-```
-
-**Successful Response (200 OK):**
-
-```json
-{
-  "url": "https://example.com/news/article",
-  "archive_url": "https://archive.is/abc123",
-  "body_text": "Article content here...",
-  "title": null,
-  "byline": null,
-  "published_date": null
-}
-```
-
-**Error Response (400/500):**
-
-```json
-{
-  "detail": {
-    "error": {
-      "code": "INVALID_URL",
-      "message": "URL must be a valid http or https URL"
+curl -X POST http://localhost:3000/scrape \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://example.com/article",
+    "selectors": {
+      "title": {"css": "h1"},
+      "author": {"css": ".author-name"},
+      "content": {"css": "article"}
     }
+  }'
+```
+
+### Response Format
+
+```json
+{
+  "url": "https://example.com/article",
+  "data": {
+    "title": "Article Title",
+    "author": "John Doe",
+    "content": "Article content..."
+  },
+  "meta": {
+    "status": 200,
+    "duration_ms": 2156
   }
 }
 ```
 
-### Error Codes
+## n8n Integration
 
-| Code                 | HTTP Status | Description                    |
-| -------------------- | ----------- | ------------------------------ |
-| `INVALID_URL`        | 422         | Invalid URL format or protocol |
-| `ARCHIVE_TIMEOUT`    | 500         | Archive service timed out      |
-| `ARCHIVE_FAILURE`    | 500         | Archive service failed         |
-| `EXTRACTION_FAILURE` | 500         | Content extraction failed      |
-| `INTERNAL_ERROR`     | 500         | Unexpected error occurred      |
+1. Add an **HTTP Request** node to your workflow
+2. Configure:
+   - **Method**: POST
+   - **URL**: `http://newsnewt:3000/scrape` (same Docker network) or `http://localhost:3000/scrape`
+   - **Body Content Type**: JSON
+   - **Body**:
+     ```json
+     {
+       "url": "{{$json.url}}",
+       "selectors": {
+         "title": { "css": "h1" },
+         "content": { "css": "article" }
+       }
+     }
+     ```
+3. Access extracted data: `{{$json.data.title}}`, `{{$json.data.content}}`
 
 ## Configuration
 
-Environment variables can be configured in `.env` or passed directly to Docker.
+The service is configured via environment variables in `compose.yml`. See [`config/.env.sample`](config/.env.sample) for detailed documentation.
 
-### Environment Variables
+### Quick Reference
 
-| Variable                   | Options                                         | Default      | Description                |
-| -------------------------- | ----------------------------------------------- | ------------ | -------------------------- |
-| `NEWSNEWT_ARCHIVE_SERVICE` | `archive_is`, `archive_today`, `auto`           | `archive_is` | Archive service to use     |
-| `NEWSNEWT_TIMEOUT_SECONDS` | 10-600                                          | 300          | Request timeout in seconds |
-| `NEWSNEWT_LOG_LEVEL`       | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` | `INFO`       | Logging verbosity          |
-| `TZ`                       | Timezone string                                 | `UTC`        | Container timezone         |
+| Variable              | Default | Description                                    |
+| --------------------- | ------- | ---------------------------------------------- |
+| `CRAWL_CONCURRENCY`   | `3`     | Maximum concurrent scraping operations         |
+| `LOG_LEVEL`           | `INFO`  | Logging level (DEBUG, INFO, WARNING, ERROR)    |
+| `PLAYWRIGHT_HEADLESS` | `true`  | Run browser in headless mode                   |
+| `ENABLE_STEALTH`      | `true`  | Enable stealth mode to avoid CAPTCHA detection |
 
-### Example .env File
+### Customizing Configuration
 
-```env
-NEWSNEWT_ARCHIVE_SERVICE=archive_is
-NEWSNEWT_TIMEOUT_SECONDS=300
-NEWSNEWT_LOG_LEVEL=INFO
-TZ=UTC
+Create a `.env` file in the project root to override defaults:
+
+```bash
+cp config/.env.sample .env
+# Edit .env with your preferred values
+docker compose down && docker compose up -d
 ```
+
+## API Endpoints
+
+### GET /health
+
+Health check endpoint. Returns `{"status": "ok"}` if service is running.
+
+### POST /scrape
+
+Scrape a URL with optional CSS selectors.
+
+**Request**:
+
+```json
+{
+  "url": "https://example.com",
+  "selectors": {
+    "field_name": { "css": "selector" }
+  },
+  "timeout_ms": 30000
+}
+```
+
+**Response**: See [Usage Examples](#usage-examples) above.
+
+For detailed API documentation, see [`docs/technical.md`](docs/technical.md).
+
+## Logging
+
+View logs in real-time:
+
+```bash
+docker compose logs -f newsnewt
+```
+
+Enable debug logging by setting `LOG_LEVEL=DEBUG` in your `.env` file or `compose.yml`.
+
+## Documentation
+
+- **[Getting Started](docs/index.md)**: Comprehensive guide with examples
+- **[Architecture](docs/architecture.md)**: System design and component overview
+- **[Technical Reference](docs/technical.md)**: Complete API documentation
+- **[Project Brief](docs/project-brief.md)**: Detailed project requirements and design
+
+## Troubleshooting
+
+### Service won't start
+
+Check logs:
+
+```bash
+docker compose logs newsnewt
+```
+
+### CAPTCHA detected
+
+- Ensure `ENABLE_STEALTH=true` in your configuration
+- Reduce `CRAWL_CONCURRENCY` to avoid rate limiting
+- Check if target site requires authentication
+
+### Empty data returned
+
+- Verify selectors match page structure
+- Enable `LOG_LEVEL=DEBUG` to see extraction attempts
+- Check if page content loads via JavaScript (may need more time)
+
+For more troubleshooting tips, see [`docs/technical.md`](docs/technical.md#troubleshooting).
 
 ## Development
 
-### Prerequisites
-
-- Python 3.12+
-- [uv](https://github.com/astral-sh/uv) package manager
-
-### Setup
+### Local Development Setup
 
 ```bash
 # Install dependencies
 uv sync
 
-# Install development dependencies
-uv sync --extra dev
+# Install Playwright browsers
+uv run playwright install chromium --with-deps
 
-# Run tests
-uv run pytest tests/ -v
-
-# Run tests with coverage
-uv run pytest tests/ --cov=src/newsnewt --cov-report=term-missing
-
-# Run linter
-uv run ruff check src/
-
-# Format code
-uv run black src/ tests/
+# Run locally
+uv run uvicorn app.main:app --host 0.0.0.0 --port 3000 --reload
 ```
 
-### Run Locally
+### Building Documentation
 
 ```bash
-# Run the service
-uv run python -m newsnewt.main
+# Install mkdocs (if not already installed)
+pip install mkdocs mkdocs-material
 
-# Service will be available at http://localhost:8000
+# Serve documentation locally
+mkdocs serve
 ```
-
-## Project Structure
-
-```
-NewsNewt/
-├── src/newsnewt/          # Source code
-│   ├── api.py             # FastAPI application and endpoints
-│   ├── archive.py         # Archive.is integration
-│   ├── config.py          # Configuration management
-│   ├── extractor.py       # Content extraction with trafilatura
-│   ├── logging_config.py  # Logging configuration
-│   ├── main.py            # Application entry point
-│   ├── models.py          # Pydantic models
-│   ├── rate_limit.py      # Rate limiting for Archive.is
-│   └── utils.py           # Utility functions
-├── tests/                 # Test suite
-│   ├── unit/              # Unit tests
-│   └── integration/       # Integration tests
-├── config/                # Configuration files
-│   └── .env.sample        # Environment variable template
-├── logs/                  # Application logs (created at runtime)
-├── docs/                  # Documentation
-│   ├── project-brief.md   # Project specifications
-│   ├── technical.md       # Technical details
-│   ├── TESTING.md         # Testing documentation
-│   └── DEPLOYMENT.md      # Deployment guide
-├── dockerfile             # Docker image definition
-├── compose.yml            # Docker Compose configuration
-├── pyproject.toml         # Project metadata and dependencies
-└── README.md              # This file
-```
-
-## Docker
-
-### Build Manually
-
-```bash
-# Build the image
-docker build -t newsnewt:latest -f dockerfile .
-
-# Run the container
-docker run -d \
-  --name newsnewt \
-  -p 8000:8000 \
-  -e NEWSNEWT_LOG_LEVEL=INFO \
-  -v $(pwd)/logs:/app/logs \
-  newsnewt:latest
-
-# Check logs
-docker logs newsnewt
-
-# Stop the container
-docker stop newsnewt && docker rm newsnewt
-```
-
-### Health Check
-
-The Docker image includes a built-in health check that runs every 30 seconds:
-
-```bash
-# Check health status
-docker inspect --format='{{.State.Health.Status}}' newsnewt
-```
-
-## Testing
-
-The project includes comprehensive test coverage:
-
-- **Unit Tests:** 33 tests covering critical paths (URL validation, config, utils, rate limiting)
-- **Integration Tests:** 10 tests covering full API workflows and error scenarios
-- **Coverage:** 63% overall (critical paths at 90%+)
-
-See [docs/TESTING.md](docs/TESTING.md) for detailed testing documentation.
-
-## Documentation
-
-- **[Project Brief](docs/project-brief.md)** - Complete project specifications
-- **[Technical Documentation](docs/technical.md)** - Technical details and API specs
-- **[Testing Documentation](docs/TESTING.md)** - Testing guide and coverage
-- **[Deployment Guide](docs/DEPLOYMENT.md)** - Production deployment instructions
-
-## Logging
-
-Logs are written to:
-
-- Console (stdout/stderr)
-- File: `logs/newsnewt.log` (with rotation, max 10MB, 5 backups)
-
-Log format:
-
-```
-2025-11-25 15:30:00 UTC - module.name - LEVEL - message
-```
-
-## Rate Limiting
-
-NewsNewt includes built-in rate limiting for Archive.is to prevent 429 (Too Many Requests) errors:
-
-- Minimum 5-second interval between archive requests
-- Async-safe with lock mechanism
-- Automatic delay when needed
-
-## Known Limitations
-
-- Archive.is may rate-limit automated requests (this is expected behavior)
-- Metadata extraction (title, byline, date) returns `null` in MVP (body text only)
-- Archive.today and Archive.is are the same service (different domains)
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+See [LICENSE](LICENSE) file for details.
 
 ## Support
 
-For issues or questions:
-
-1. Check the [documentation](docs/)
-2. Review the [testing guide](docs/TESTING.md)
-3. Check [deployment guide](docs/DEPLOYMENT.md)
-
-## Changelog
-
-### v0.1.0 (2025-11-25)
-
-- ✅ Initial MVP release
-- ✅ Archive.is integration with rate limiting
-- ✅ Content extraction with trafilatura
-- ✅ FastAPI REST API
-- ✅ Docker deployment
-- ✅ Comprehensive test suite
-- ✅ Structured error handling
+For issues and feature requests, please use the project's issue tracker.

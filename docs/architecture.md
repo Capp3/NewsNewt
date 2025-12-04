@@ -1,406 +1,352 @@
-# NewsNewt - Architecture Documentation
+# Architecture
 
-> **System architecture, component interactions, and design decisions**
+This document describes the system architecture of NewsNewt, a Crawlee-based web scraping microservice.
 
-## System Architecture Overview
+## System Overview
 
-NewsNewt follows a simple, layered architecture optimized for reliability and maintainability. The system is designed as a stateless microservice with clear separation of concerns.
-
----
-
-## Component Architecture
-
-```mermaid
-graph TD
-    Client[n8n Client] -->|HTTP POST| API[API Layer]
-    API -->|Validate| Validator[Request Validator]
-    Validator -->|Normalize| Archive[Archive Service]
-    Archive -->|Fetch| Extractor[Content Extractor]
-    Extractor -->|Format| Formatter[Response Formatter]
-    Formatter -->|JSON| Client
-
-    Archive -->|Archive.is| ArchiveProvider[Archive.is/Archive.today]
-    ArchiveProvider -->|HTML| Extractor
-
-    API -->|Log| Logger[Logging System]
-    Extractor -->|Log| Logger
-    Archive -->|Log| Logger
-```
-
----
-
-## Layer Responsibilities
-
-### 1. API Layer (`api.py`)
-
-**Responsibilities:**
-
-- HTTP request/response handling
-- Route definitions (POST /article, GET /health)
-- Error response formatting
-- Request logging
-
-**Interfaces:**
-
-- Receives JSON requests
-- Returns JSON responses
-- Handles HTTP status codes
-
-### 2. Request Validation Layer (`utils.py`)
-
-**Responsibilities:**
-
-- URL validation and normalization
-- Request schema validation
-- Archive service selection logic
-- Input sanitization
-
-**Interfaces:**
-
-- Validates incoming requests
-- Normalizes URLs
-- Returns validation errors
-
-### 3. Archive Service Layer (`archive.py`)
-
-**Responsibilities:**
-
-- Archive service abstraction
-- Archive URL resolution (new or existing)
-- Archive HTML fetching
-- Timeout handling
-
-**Interfaces:**
-
-- Takes URL and archive flags
-- Returns archive URL and HTML content
-- Handles archive service errors
-
-### 4. Content Extraction Layer (`extractor.py`)
-
-**Responsibilities:**
-
-- HTML parsing and cleaning using trafilatura
-- Article body text extraction (required, minimum 50 characters)
-- Error handling for extraction failures
-
-**Interfaces:**
-
-- Takes HTML content and URL
-- Returns plain text body content
-- Handles extraction failures with ExtractionError
-
-### 5. Data Models Layer (`models.py`)
-
-**Responsibilities:**
-
-- Request/response schemas
-- Data validation
-- Type definitions
-
-**Interfaces:**
-
-- Defines data structures
-- Validates data formats
-
----
-
-## Data Flow
-
-### Successful Request Flow
+NewsNewt is designed as a single-purpose microservice that sits between n8n workflows and target websites, providing intelligent web scraping capabilities with JavaScript rendering support.
 
 ```
-1. n8n → POST /article
-   {
-     "url": "https://example.com/news/article",
-     "force_archive": false,
-     "archive_service": "auto"
-   }
-
-2. API Layer validates request format
-
-3. Request Validator validates URL and resolves archive service
-
-4. Archive Service:
-   - Checks for existing archive (if not force_archive)
-   - Creates new archive if needed
-   - Fetches archived HTML
-
-5. Content Extractor:
-   - Parses HTML using trafilatura
-   - Extracts article body text (minimum 50 characters)
-   - Validates extracted content
-
-6. API Layer structures response:
-   - Creates ArticleResponse with url, archive_url, body_text
-   - Optional metadata fields set to None (MVP)
-
-7. API Layer returns 200 OK with JSON
-
-8. n8n receives structured article data
+┌─────────┐      HTTP/JSON      ┌───────────┐      Browser      ┌──────────────┐
+│   n8n   │ ──────────────────> │ NewsNewt  │ ───────────────> │ Target Sites │
+│Workflow │ <────────────────── │  Service  │ <─────────────── │              │
+└─────────┘      HTTP/JSON      └───────────┘      HTML/Data   └──────────────┘
 ```
 
-### Error Flow
+## Core Components
+
+### 1. FastAPI Application
+
+**Location**: `src/app/main.py`
+
+The FastAPI application serves as the HTTP interface, providing:
+
+- **Health Check Endpoint** (`GET /health`): Simple liveness check
+- **Scrape Endpoint** (`POST /scrape`): Main scraping functionality
+- **Lifespan Management**: Initializes and manages the Crawlee crawler instance
+
+**Key Responsibilities**:
+
+- Request validation via Pydantic models
+- Crawler lifecycle management
+- Request/response tracking
+- Error handling and JSON response formatting
+
+### 2. Crawlee Crawler
+
+**Technology**: Crawlee for Python with PlaywrightCrawler
+
+The crawler is initialized during application startup and runs continuously, processing queued requests.
+
+**Configuration**:
+
+- **Headless Mode**: Configurable via `PLAYWRIGHT_HEADLESS` env var
+- **Concurrency**: Limited by `CRAWL_CONCURRENCY` setting
+- **Stealth Mode**: Optional anti-detection via `ENABLE_STEALTH`
+
+**Request Processing Flow**:
+
+1. FastAPI endpoint receives request
+2. Request is queued with unique ID and user data
+3. Crawler processes request asynchronously
+4. Result is stored and returned via Future
+5. Response sent back to client
+
+### 3. Playwright Browser
+
+**Technology**: Chromium browser via Playwright
+
+Provides full JavaScript rendering capabilities:
+
+- Executes client-side JavaScript
+- Handles SPAs and dynamic content
+- Supports modern web standards
+- Optional stealth mode to avoid detection
+
+### 4. Extraction Utilities
+
+**Location**: `src/app/extraction.py`
+
+A collection of utility functions for intelligent content extraction:
+
+#### `dismiss_popups(page)`
+
+Attempts to automatically close common popups and cookie banners:
+
+- Searches for acceptance buttons ("Accept", "OK", "Agree", etc.)
+- Clicks close buttons and removes banner elements
+- Silently continues if no popups found
+
+#### `extract_with_fallbacks(page, selectors)`
+
+Extracts content using provided selectors with automatic fallbacks:
+
+- Tries user-provided CSS selectors first
+- Falls back to common patterns for known field types
+- Supports: title, content, author, date, description
+- Returns empty string if no matches found
+
+#### `detect_captcha(page)`
+
+Detects if a CAPTCHA is present:
+
+- Scans page text for CAPTCHA keywords
+- Checks for CAPTCHA-related iframes
+- Looks for common CAPTCHA elements (reCAPTCHA, hCaptcha)
+- Returns boolean result
+
+## Request Flow
+
+### Successful Scrape
 
 ```
-1. n8n → POST /article (invalid URL)
-
-2. Request Validator detects invalid URL
-
-3. Error Handler creates error response:
-   {
-     "detail": {
-       "error": {
-         "code": "INVALID_URL",
-         "message": "...",
-         "details": {...}
-       }
-     }
-   }
-
-4. API Layer returns 400/422 Bad Request
-
-5. n8n receives error response
+1. n8n → POST /scrape with URL and selectors
+         ↓
+2. FastAPI validates request → generates request_id
+         ↓
+3. Creates Future and adds to tracker
+         ↓
+4. Enqueues request to Crawlee with user_data
+         ↓
+5. Crawlee spawns Playwright browser
+         ↓
+6. Playwright navigates to URL (with stealth if enabled)
+         ↓
+7. dismiss_popups() removes cookie banners
+         ↓
+8. detect_captcha() checks for CAPTCHAs
+         ↓
+9. extract_with_fallbacks() extracts data
+         ↓
+10. Result stored and Future resolved
+         ↓
+11. FastAPI returns JSON response to n8n
 ```
 
----
+### Error Handling
 
-## Component Interactions
+Errors are categorized and returned as structured JSON:
 
-### Archive Service Integration
+- **CAPTCHA Detected** (`422`): CAPTCHA found on page
+- **Timeout** (`408`): Request exceeded timeout limit
+- **Scraping Error** (`500`): General scraping failure
 
-The archive service layer abstracts the Archive.is/Archive.today integration:
-
-```python
-# Simplified interface
-def archive_url(url: str, force: bool = False) -> tuple[str, str]:
-    """
-    Archive URL and return (archive_url, html_content).
-
-    Args:
-        url: Original article URL
-        force: Whether to force new archive creation
-
-    Returns:
-        Tuple of (archive_url, html_content)
-
-    Raises:
-        ArchiveTimeoutError: If archiving exceeds timeout
-        ArchiveFailureError: If archiving fails
-    """
-```
-
-### Content Extraction
-
-The extractor uses trafilatura to extract content:
-
-```python
-# Actual interface
-async def extract_article_content(html: str, url: str) -> str:
-    """
-    Extract article body text from HTML.
-
-    Args:
-        html: HTML content from archive
-        url: Original URL (for context)
-
-    Returns:
-        Plain text body content (minimum 50 characters)
-
-    Raises:
-        ExtractionError: If extraction fails or content is insufficient
-    """
-```
-
----
-
-## Error Handling Architecture
-
-### Error Propagation
-
-```
-Request → Validation Error → API Layer → Error Response (400)
-                                ↓
-Request → Archive Error → API Layer → Error Response (500)
-                                ↓
-Request → Extraction Error → API Layer → Error Response (500)
-                                ↓
-Request → Unexpected Error → API Layer → Error Response (500, INTERNAL_ERROR)
-```
-
-### Error Response Standardization
-
-All errors follow a consistent structure (wrapped in FastAPI's `detail` field):
+All errors include:
 
 ```json
 {
-  "detail": {
-    "error": {
-      "code": "ERROR_CODE",
-      "message": "Human-readable message",
-      "details": {
-        "context": "specific to error type"
-      }
-    }
+  "url": "...",
+  "data": {},
+  "meta": {
+    "status": 422,
+    "duration_ms": 1234,
+    "error_type": "captcha_detected",
+    "error_message": "CAPTCHA detected on page"
   }
 }
 ```
 
----
+## Docker Architecture
 
-## Configuration Architecture
-
-### Environment-Based Configuration
-
-- All configuration via environment variables
-- No hardcoded values
-- Default values provided
-- `.env.sample` documents all options
-
-### Configuration Flow
+### Container Structure
 
 ```
-Environment Variables
-    ↓
-Configuration Loader
-    ↓
-Application Components
-    ↓
-Runtime Behavior
+┌─────────────────────────────────────────┐
+│          newsnewt Container             │
+│                                         │
+│  ┌─────────────────────────────────┐   │
+│  │   FastAPI App (port 3000)       │   │
+│  │   - uvicorn ASGI server         │   │
+│  │   - Request handling            │   │
+│  └──────────────┬──────────────────┘   │
+│                 │                       │
+│  ┌──────────────▼──────────────────┐   │
+│  │   Crawlee Crawler               │   │
+│  │   - Request queue               │   │
+│  │   - Concurrency control         │   │
+│  └──────────────┬──────────────────┘   │
+│                 │                       │
+│  ┌──────────────▼──────────────────┐   │
+│  │   Playwright + Chromium         │   │
+│  │   - Browser automation          │   │
+│  │   - JS rendering                │   │
+│  └─────────────────────────────────┘   │
+│                                         │
+│  Volumes:                               │
+│  - ./logs → /app/logs (log files)      │
+└─────────────────────────────────────────┘
 ```
 
----
+### Networking
 
-## Logging Architecture
+- **Internal Port**: 3000 (application listens)
+- **External Port**: 3000 (mapped via docker-compose)
+- **Network**: `newsnewt-network` (bridge)
 
-### Logging Flow
+When used with n8n in the same Docker network:
 
-```
-Request → API Layer → Log Request Start
-    ↓
-Processing → Components → Log Progress
-    ↓
-Success/Error → API Layer → Log Outcome + Duration
-    ↓
-Log Handler → Rotating File Handler → logs/newsnewt.log
+```yaml
+# n8n HTTP Request node URL
+http://newsnewt:3000/scrape
 ```
 
-### Log Structure
+When accessed from host machine:
 
-All logs include:
-
-- Timestamp (ISO 8601 UTC)
-- Log level
-- Component/module name
-- Message with context
-- Request duration (for completed requests)
-
----
-
-## Deployment Architecture
-
-### Container Architecture
-
-```
-┌─────────────────────────────────┐
-│   Docker Container              │
-│                                 │
-│   ┌──────────────────────────┐  │
-│   │   NewsNewt Service       │  │
-│   │   (Python 3.12)          │  │
-│   │   Port: 8000             │  │
-│   └──────────────────────────┘  │
-│                                 │
-│   ┌──────────────────────────┐  │
-│   │   Logs Volume            │  │
-│   │   /app/logs/             │  │
-│   └──────────────────────────┘  │
-│                                 │
-│   Environment Variables         │
-└─────────────────────────────────┘
-         │
-         │ Private Docker Network
-         │
-    ┌────┴────┐
-    │   n8n   │
-    └─────────┘
+```bash
+http://localhost:3000/scrape
 ```
 
-### Network Architecture
+## Environment Variables
 
-- **Internal Network:** Private Docker network
-- **Service Discovery:** Via service name (newsnewt)
-- **Port Exposure:** Internal only (no public ports)
-- **Communication:** HTTP over private network
+Configuration is managed via environment variables:
 
----
+| Variable                   | Purpose                  | Default            | Notes                                 |
+| -------------------------- | ------------------------ | ------------------ | ------------------------------------- |
+| `CRAWL_CONCURRENCY`        | Max simultaneous scrapes | `3`                | Higher values increase resource usage |
+| `LOG_LEVEL`                | Logging verbosity        | `INFO`             | Options: DEBUG, INFO, WARNING, ERROR  |
+| `PLAYWRIGHT_HEADLESS`      | Run browser headless     | `true`             | Set to `false` for debugging          |
+| `ENABLE_STEALTH`           | Enable anti-detection    | `true`             | Reduces CAPTCHA triggers              |
+| `PLAYWRIGHT_BROWSERS_PATH` | Browser install location | `/app/.playwright` | Set in Dockerfile                     |
 
-## Design Principles
+## Performance Considerations
 
-1. **Separation of Concerns:** Each layer has a single, clear responsibility
-2. **Stateless Design:** No session state, each request is independent
-3. **Fail Fast:** Early validation and error detection
-4. **Explicit Error Handling:** All error paths are explicit and logged
-5. **Configuration Over Code:** All behavior configurable via environment
-6. **Observable:** Comprehensive logging at all levels
+### Concurrency
 
----
+The `CRAWL_CONCURRENCY` setting controls how many pages can be scraped simultaneously:
 
-## Scalability Considerations
+- **Low (1-2)**: Conservative, lower resource usage
+- **Medium (3-5)**: Balanced for typical use cases
+- **High (6+)**: Aggressive, requires more CPU/memory
 
-### Current Design (Single Instance)
+### Resource Usage
 
-- Stateless service allows horizontal scaling
-- No shared state between instances
-- Can scale via container orchestration
+Typical resource consumption per concurrent scrape:
 
-### Rate Limiting
+- **CPU**: ~200-300% per browser instance
+- **Memory**: ~200-500 MB per browser instance
+- **Network**: Depends on target page size
 
-- Built-in rate limiting for Archive.is (5-second minimum interval)
-- Prevents 429 errors from archive service
-- Async-safe with lock mechanism
+### Recommended Limits
 
----
+For production deployment:
 
-## Security Architecture
+```yaml
+services:
+  newsnewt:
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 4G
+        reservations:
+          cpus: "2"
+          memory: 2G
+```
 
-### Network Security
+## Security
 
-- Private Docker network isolation
-- No public internet exposure
-- Network-level security assumed
+### Internal Service Design
 
-### Input Security
+NewsNewt is designed as an **internal service** with no authentication:
 
-- URL validation and sanitization
-- Request size limits
-- Timeout protection
+- Should NOT be exposed to the public internet
+- Intended for use within private Docker networks
+- No rate limiting or authentication built-in
 
-### Output Security
+### Recommended Deployment
 
-- Sanitized error messages
-- No sensitive data in logs
-- Structured error responses
+1. **Same Network as n8n**: Deploy in the same Docker network
+2. **Firewall Protection**: Do not expose port 3000 publicly
+3. **Reverse Proxy**: If external access needed, use authenticated reverse proxy
 
----
+### Future Security Enhancements
 
-## Monitoring & Observability
+For production environments requiring public access:
 
-### Health Checks
+- Add API key authentication
+- Implement rate limiting
+- Add request validation and sanitization
+- Consider using a reverse proxy with authentication
 
-- GET /health endpoint for container orchestration
-- Returns service status
-- No external dependencies
+## Monitoring and Logging
 
 ### Logging
 
-- Structured logging with context
-- Log rotation for disk management
-- Configurable log levels
+Logs are written to:
 
-### Logging Features
+- **Console**: Standard output (captured by Docker)
+- **Log Files**: `/app/logs` directory (mounted volume)
 
-- Request/response logging with context
-- Duration tracking for completed requests
-- Structured log format with UTC timestamps
-- Configurable log levels (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+Log format:
+
+```
+2024-12-02 10:30:45 - app.main - INFO - Received scrape request abc123 for URL: https://example.com
+```
+
+### Health Checks
+
+Docker Compose includes automatic health checking:
+
+```yaml
+healthcheck:
+  test:
+    [
+      "CMD",
+      "python",
+      "-c",
+      "import urllib.request; urllib.request.urlopen('http://localhost:3000/health')",
+    ]
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 5s
+```
+
+Container is marked unhealthy if `/health` endpoint fails to respond.
+
+## Scalability
+
+### Horizontal Scaling
+
+NewsNewt can be horizontally scaled using Docker Compose or orchestration:
+
+```yaml
+services:
+  newsnewt:
+    deploy:
+      replicas: 3
+```
+
+Add a load balancer (nginx, traefik) to distribute requests across instances.
+
+### Vertical Scaling
+
+Increase resources per container:
+
+- Raise `CRAWL_CONCURRENCY` for more parallel scrapes
+- Allocate more CPU and memory via Docker limits
+- Monitor resource usage and adjust accordingly
+
+## Technology Stack
+
+| Layer              | Technology         | Version | Purpose                       |
+| ------------------ | ------------------ | ------- | ----------------------------- |
+| Runtime            | Python             | 3.12    | Application runtime           |
+| Package Manager    | uv                 | 0.9.11  | Fast dependency management    |
+| Web Framework      | FastAPI            | 0.115+  | HTTP API server               |
+| ASGI Server        | Uvicorn            | 0.32+   | Production ASGI server        |
+| Crawler Framework  | Crawlee            | 0.4+    | Scraping orchestration        |
+| Browser Automation | Playwright         | Latest  | Browser control and rendering |
+| Browser            | Chromium           | Latest  | JavaScript execution          |
+| Anti-Detection     | playwright-stealth | 1.0.6+  | Stealth mode support          |
+| Validation         | Pydantic           | 2.0+    | Request/response models       |
+| HTTP Client        | httpx              | 0.27+   | Async HTTP requests           |
+| Container          | Docker             | 20.10+  | Containerization              |
+
+## Design Principles
+
+1. **Simplicity**: Single purpose, minimal configuration
+2. **Reliability**: Structured error handling, no crashes
+3. **Integration**: Designed specifically for n8n workflows
+4. **Observability**: Comprehensive logging, health checks
+5. **Maintainability**: Clean code, clear separation of concerns

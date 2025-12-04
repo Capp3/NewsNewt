@@ -1,16 +1,18 @@
-# Vibe Dev Template Makefile
-# Example Makefile with uv and mkdocs commands
+# NewsNewt Makefile
+# Docker compose and development commands
 
-.PHONY: help install setup serve build clean lint lint-fix
+.PHONY: help install setup lint lint-fix up down exec build logs
 
 # Default target
 help:
 	@echo "Available commands:"
 	@echo "  install    - Install uv package manager"
 	@echo "  setup      - Create virtual environment with uv"
-	@echo "  serve      - Start MkDocs development server"
-	@echo "  build      - Build MkDocs static site"
-	@echo "  clean      - Clean build artifacts"
+	@echo "  up         - Start containers with docker compose"
+	@echo "  down       - Stop containers with docker compose"
+	@echo "  exec       - Execute command in container (usage: make exec CMD='bash')"
+	@echo "  build      - Build images without cache"
+	@echo "  logs       - View container logs"
 	@echo "  lint       - Run linting checks (ruff + pyright)"
 	@echo "  lint-fix   - Auto-fix linting issues with ruff"
 	@echo "  help       - Show this help message"
@@ -27,30 +29,36 @@ setup:
 	uv venv
 	@echo "Virtual environment created!"
 
-# Start MkDocs development server using uvx (no local install needed)
-serve:
-	@echo "Starting MkDocs development server..."
-	uvx mkdocs serve
+# Start containers with docker compose
+up:
+	@echo "Starting containers..."
+	docker compose up -d
+	@echo "Containers started!"
 
-# Build MkDocs static site using uvx
+# Stop containers with docker compose
+down:
+	@echo "Stopping containers..."
+	docker compose down
+	@echo "Containers stopped!"
+
+# Execute command in container
+exec:
+	@if [ -z "$(CMD)" ]; then \
+		echo "Error: CMD is required. Usage: make exec CMD='bash'"; \
+		exit 1; \
+	fi
+	docker compose exec newsnewt $(CMD)
+
+# Build images without cache
 build:
-	@echo "Building MkDocs static site..."
-	uvx mkdocs build
+	@echo "Building images without cache..."
+	docker compose build --no-cache
+	@echo "Build complete!"
 
-# Clean build artifacts
-clean:
-	@echo "Cleaning build artifacts..."
-	rm -rf site/
-	rm -rf .cache/
-	@echo "Clean complete!"
-
-# Development workflow - setup and serve
-dev: setup serve
-
-# Full build workflow
-deploy: build
-	@echo "Site built in 'site/' directory"
-	@echo "Ready for deployment!"
+# View container logs
+logs:
+	@echo "Viewing container logs (Ctrl+C to exit)..."
+	docker compose logs -f
 
 # Run linting checks with ruff and pyright
 lint:
