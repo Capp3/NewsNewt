@@ -100,9 +100,9 @@ indent_size = 2
 
 # Makefiles
 [Makefile]
-indent_style = space
+indent_style = tab
 indent_size = 2
 
 [Makefile.*]
-indent_style = space
+indent_style = tab
 indent_size = 2

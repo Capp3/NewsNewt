@@ -34,7 +34,9 @@ async def dismiss_popups(page: Page) -> None:
         "Allow all",
     ]
 
-    logger.debug(f"Scanning for popup buttons with {len(button_texts)} text patterns...")
+    logger.debug(
+        f"Scanning for popup buttons with {len(button_texts)} text patterns..."
+    )
 
     # Try to find and click acceptance buttons
     for text in button_texts:
@@ -90,14 +92,17 @@ async def dismiss_popups(page: Page) -> None:
         "[data-testid*='consent' i]",
     ]
 
-    logger.debug(f"Scanning for banner elements with {len(banner_selectors)} selectors...")
+    logger.debug(
+        f"Scanning for banner elements with {len(banner_selectors)} selectors..."
+    )
     removed_banners = 0
 
     # Try to remove banners directly
     for selector in banner_selectors:
         try:
             result = await page.eval_on_selector_all(
-                selector, "elements => { const count = elements.length; elements.forEach(e => e.remove()); return count; }"
+                selector,
+                "elements => { const count = elements.length; elements.forEach(e => e.remove()); return count; }",
             )
             if result and result > 0:
                 logger.info(f"🍪 Removed {result} banner element(s): {selector}")
@@ -179,7 +184,6 @@ async def extract_with_fallbacks(
 
     for field_name, selector_config in selectors.items():
         value = None
-        used_selector = None
 
         # Try the user-provided selector first
         if "css" in selector_config:
@@ -194,7 +198,6 @@ async def extract_with_fallbacks(
                     else:
                         value = await element.text_content()
                     if value and value.strip():
-                        used_selector = css_selector
                         logger.info(
                             f"✓ Field '{field_name}': Found with provided selector (length: {len(value.strip())})"
                         )
@@ -216,7 +219,6 @@ async def extract_with_fallbacks(
                         else:
                             value = await element.text_content()
                         if value and value.strip():
-                            used_selector = fallback_selector
                             logger.info(
                                 f"✓ Field '{field_name}': Found with fallback #{idx}: {fallback_selector} (length: {len(value.strip())})"
                             )

@@ -40,6 +40,7 @@ RUN mkdir -p /app/logs
 # Set Playwright environment variables
 ENV PLAYWRIGHT_BROWSERS_PATH=/app/.playwright
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=0
+# Browser launch args are configured via BrowserPool in the application code
 
 # Set Python path to include src directory
 ENV PYTHONPATH=/app/src:$PYTHONPATH
