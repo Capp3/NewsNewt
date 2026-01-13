@@ -1,134 +1,35 @@
 # =============================================================================
-# PYTHON CORE
+# OPERATING SYSTEM FILES
 # =============================================================================
 
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[codz]
-*$py.class
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
 
-# C extensions
-*.so
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
 
-# =============================================================================
-# PACKAGE MANAGEMENT & DEPENDENCIES
-# =============================================================================
-
-# UV (package manager)
-uv.lock
-
-# pipenv
-#Pipfile.lock
-
-# poetry
-#poetry.lock
-#poetry.toml
-
-# pdm
-#pdm.lock
-#pdm.toml
-.pdm-python
-.pdm-build/
-
-# pixi
-#pixi.lock
-.pixi
-
-# PEP 582
-__pypackages__/
-
-# =============================================================================
-# BUILD & DISTRIBUTION
-# =============================================================================
-
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# PyInstaller
-*.manifest
-*.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# PyBuilder
-.pybuilder/
-target/
-
-# =============================================================================
-# TESTING & COVERAGE
-# =============================================================================
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py.cover
-.hypothesis/
-.pytest_cache/
-cover/
-
-# =============================================================================
-# VIRTUAL ENVIRONMENTS
-# =============================================================================
-
-# Python virtual environments
-.env
-.envrc
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Project-specific configuration
-config/.env
-
-# pyenv
-.python-version
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
 
 # =============================================================================
 # DEVELOPMENT TOOLS & IDEs
 # =============================================================================
 
-# Traditional IDEs
-# PyCharm / IntelliJ
-#.idea/
-
 # Visual Studio Code
 #.vscode/
 
-# Spyder
-.spyderproject
-.spyproject
-
-# Rope
-.ropeproject
+# PyCharm / IntelliJ
+#.idea/
 
 # Sublime Text
 *.sublime-project
@@ -137,12 +38,10 @@ config/.env
 # Vim/Neovim
 *.swp
 *.swo
-*~
 .vimrc.local
 .nvimrc.local
 
 # Emacs
-*~
 \#*\#
 /.emacs.desktop
 /.emacs.desktop.lock
@@ -151,14 +50,26 @@ auto-save-list
 tramp
 .\#*
 
+# Spyder
+.spyderproject
+.spyproject
+
+# Rope
+.ropeproject
+
+# Visual Studio
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
 # =============================================================================
 # AI-POWERED DEVELOPMENT TOOLS
 # =============================================================================
 
 # Cursor AI
-.cursor/
-
-optimization-journey/
+# .cursor/
 
 # Windsurf AI
 .windsurf/
@@ -219,149 +130,213 @@ kite.log
 ai_workspace/
 
 # =============================================================================
-# TYPE CHECKING & LINTING
+# VERSION CONTROL
 # =============================================================================
 
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre type checker
-.pyre/
-
-# pytype static type analyzer
-.pytype/
-
-# Ruff linter
-.ruff_cache/
+# Git
+*.orig
+*.rej
+*.patch
 
 # =============================================================================
-# DOCUMENTATION
+# BUILD ARTIFACTS & DEPENDENCIES
 # =============================================================================
 
-# Sphinx documentation
-docs/_build/
+# General build directories
+build/
+dist/
+dist-ssr/
+target/
+out/
+bin/
+obj/
 
-# mkdocs documentation
-/site
-
-# =============================================================================
-# FRAMEWORK-SPECIFIC
-# =============================================================================
-
-# Django
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
-
-# Flask
-instance/
-.webassets-cache
-
-# Scrapy
-.scrapy
-
-# Celery
-celerybeat-schedule
-celerybeat.pid
-
-# =============================================================================
-# JUPYTER & NOTEBOOKS
-# =============================================================================
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
-
-# =============================================================================
-# SPECIALIZED TOOLS
-# =============================================================================
-
-# SageMath
-*.sage.py
-
-# Cython
-cython_debug/
-
-# Translations
-*.mo
-*.pot
-
-# PyPI configuration
-.pypirc
-
-# Marimo
-marimo/_static/
-marimo/_lsp/
-__marimo__/
-
-# Streamlit
-.streamlit/secrets.toml
-
-# Abstra
-.abstra/
-
-# =============================================================================
-# PROJECT-SPECIFIC
-# =============================================================================
-
-# Custom development modes and optimization documentation
-# custom_modes/
-# optimization-journey/
-
-# =============================================================================
-# LOGS
-# =============================================================================
-logs
-*.log
+# Node.js / JavaScript / TypeScript
+node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+.npm
+.yarn/
+.pnp.*
 
 # =============================================================================
-# NODE / JAVA
+# ENVIRONMENT & CONFIGURATION
 # =============================================================================
 
-node_modules
-dist
-dist-ssr
+# Environment files
+.env
+.env.local
+.env.*.local
+.envrc
+
+# Local configuration
 *.local
 
+# =============================================================================
+# DOCKER & CONTAINERS
+# =============================================================================
+
+# Docker
+docker-compose.override.yml
+.dockerignore
 
 # =============================================================================
-# OPERATING SYSTEM FILES
+# LOGS & TEMPORARY FILES
 # =============================================================================
 
-# macOS
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
+# Log files
+logs/
+*.log
 
-# Windows
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-$RECYCLE.BIN/
+# Temporary files
+temp/
+tmp/
+*.tmp
+*.temp
 
-# Linux
-*~
-.fuse_hidden*
-.directory
-.Trash-*
+# =============================================================================
+# CACHE DIRECTORIES
+# =============================================================================
 
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+# Generic cache
+.cache/
+*.cache
+
+# =============================================================================
+# DOCUMENTATION BUILD
+# =============================================================================
+
+# MkDocs
+/site
+
+# Sphinx
+docs/_build/
+
+# =============================================================================
+# LANGUAGE-SPECIFIC PATTERNS (for reference/optional use in specific projects)
+# =============================================================================
+# Uncomment sections below as needed for specific project types
+
+# -----------------------------------------------------------------------------
+# PYTHON (Uncomment for Python projects)
+# -----------------------------------------------------------------------------
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Package management
+uv.lock
+#Pipfile.lock
+#poetry.lock
+#poetry.toml
+#pdm.lock
+#pdm.toml
+.pdm-python
+.pdm-build/
+#pixi.lock
+.pixi
+__pypackages__/
+
+# Distribution / packaging
+.Python
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# PyBuilder
+.pybuilder/
+
+# Testing & Coverage
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+nosetests.xml
+coverage.xml
+*.cover
+*.py.cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Virtual environments
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# pyenv
+.python-version
+
+# Type checking & Linting
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+profile_default/
+ipython_config.py
+
+# Framework-specific
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+instance/
+.webassets-cache
+.scrapy
+celerybeat-schedule
+celerybeat.pid
+
+# Specialized tools
+*.sage.py
+cython_debug/
+*.mo
+*.pot
+.pypirc
+marimo/_static/
+marimo/_lsp/
+__marimo__/
+.streamlit/secrets.toml
+.abstra/
+
+# -----------------------------------------------------------------------------
+# END PYTHON SECTION
+# -----------------------------------------------------------------------------
