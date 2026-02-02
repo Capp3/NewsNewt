@@ -1,10 +1,9 @@
 """Crawler setup and request handling logic."""
 
-import json
 import logging
 import time
 from collections.abc import Awaitable, Callable
-from typing import Any, cast
+from typing import cast
 
 from crawlee.browsers import BrowserPool, PlaywrightBrowserPlugin
 from crawlee.crawlers import PlaywrightCrawler, PlaywrightCrawlingContext
@@ -14,37 +13,6 @@ from app.config import Config
 from app.extraction import detect_captcha, dismiss_popups, extract_with_fallbacks
 
 logger = logging.getLogger(__name__)
-
-# #region agent log
-import os
-
-LOG_PATH = os.getenv("DEBUG_LOG_PATH", "/Users/dcapp3/code/NewsNewt/.cursor/debug.log")
-
-
-def _debug_log(
-    hypothesis_id: str, location: str, message: str, data: dict[str, Any] | None = None
-) -> None:
-    """Write debug log entry in NDJSON format."""
-    try:
-        import time as time_module
-
-        log_entry = {
-            "sessionId": "debug-session",
-            "runId": "run1",
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data or {},
-            "timestamp": int(time_module.time() * 1000),
-        }
-        os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
-        with open(LOG_PATH, "a", encoding="utf-8") as f:
-            f.write(json.dumps(log_entry) + "\n")
-    except Exception:
-        pass  # Silently fail if logging fails
-
-
-# #endregion agent log
 
 
 def create_request_handler(
@@ -75,9 +43,7 @@ def create_request_handler(
         # Apply stealth IMMEDIATELY at the start (as early as possible)
         if enable_stealth:
             try:
-                from playwright_stealth import (
-                    stealth_async,  # type: ignore[import-untyped]
-                )
+                from playwright_stealth import stealth_async  # type: ignore[import-untyped]
 
                 await stealth_async(page)
                 logger.debug(f"[{request_id}] Stealth mode applied")
@@ -185,28 +151,10 @@ def create_crawler(app: FastAPI) -> PlaywrightCrawler:
     Returns:
         Configured PlaywrightCrawler instance
     """
-    # #region agent log
-    _debug_log(
-        "A",
-        "crawler.py:141",
-        "create_crawler entry",
-        {"config_keys": list(Config.get_crawler_settings().keys())},
-    )
-    # #endregion agent log
-
     config = Config.get_crawler_settings()
     request_handler = create_request_handler(
         app, enable_stealth=config["enable_stealth"]
     )
-
-    # #region agent log
-    _debug_log(
-        "A",
-        "crawler.py:173",
-        "Creating browser pool with launch options",
-        {"headless": config["headless"]},
-    )
-    # #endregion agent log
 
     # Configure browser launch options via BrowserPool (required for Crawlee 0.4.0+)
     browser_plugin = PlaywrightBrowserPlugin(
@@ -218,53 +166,16 @@ def create_crawler(app: FastAPI) -> PlaywrightCrawler:
     )
     browser_pool = BrowserPool(plugins=[browser_plugin])
 
-    # #region agent log
-    _debug_log(
-        "A",
-        "crawler.py:185",
-        "BrowserPool created",
-        {"plugin_type": type(browser_plugin).__name__},
-    )
-    _debug_log(
-        "B", "crawler.py:185", "Using BrowserPool approach", {"has_browser_pool": True}
-    )
-    # #endregion agent log
-
     # Initialize crawler with BrowserPool
     try:
-        # #region agent log
-        _debug_log(
-            "C", "crawler.py:190", "Creating PlaywrightCrawler with browser_pool", {}
-        )
-        # #endregion agent log
-
         crawler = PlaywrightCrawler(
             browser_pool=browser_pool,
             max_requests_per_crawl=None,  # No limit
             max_request_retries=1,
             request_handler=request_handler,
         )
-
-        # #region agent log
-        _debug_log(
-            "A",
-            "crawler.py:200",
-            "PlaywrightCrawler created successfully",
-            {"crawler_type": type(crawler).__name__},
-        )
-        # #endregion agent log
     except (TypeError, AttributeError) as e:
-        # #region agent log
-        _debug_log(
-            "A",
-            "crawler.py:203",
-            "Error caught",
-            {"error_msg": str(e), "error_type": type(e).__name__},
-        )
-        _debug_log(
-            "B", "crawler.py:203", "Crawler initialization failed", {"error": str(e)}
-        )
-        # #endregion agent log
+        logger.error(f"Failed to create PlaywrightCrawler: {e}", exc_info=True)
         raise
 
     # Log stealth configuration status

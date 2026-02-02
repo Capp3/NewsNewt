@@ -11,7 +11,9 @@ class Config:
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
 
     # Playwright/Crawler settings
-    playwright_headless: bool = os.getenv("PLAYWRIGHT_HEADLESS", "true").lower() == "true"
+    playwright_headless: bool = (
+        os.getenv("PLAYWRIGHT_HEADLESS", "true").lower() == "true"
+    )
     enable_stealth: bool = os.getenv("ENABLE_STEALTH", "true").lower() == "true"
     crawl_concurrency: int = int(os.getenv("CRAWL_CONCURRENCY", "3"))
 

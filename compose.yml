@@ -20,10 +20,3 @@ services:
       - TZ=${TZ:-UTC}  # Timezone for logs and timestamps
     volumes:
       - ./logs:/app/logs  # Persist logs to host
-    networks:
-      - newsnewt-network
-
-networks:
-  newsnewt-network:
-    driver: bridge
-
